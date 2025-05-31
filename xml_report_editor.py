@@ -7,9 +7,14 @@ from PyQt6.QtWidgets import (
     QGroupBox, QMessageBox, QFileDialog, QStyle)
 from PyQt6.QtGui import QIcon, QAction, QKeySequence
 from PyQt6.QtCore import Qt, QDate, QPoint
-from dialogs import EPSYearSelectionDialog, EPriceCompanySelectionDialog, ManageEPriceCompaniesDialog
-from ui_sections import (EPSSectionWidget, QuoteSelectionWidget, QuoteDetailsWidget,
-                         EPriceSectionWidget, PESectionWidget, RecordReportSectionWidget)
+from dialogs import ManageEPriceCompaniesDialog # EPSYearSelectionDialog, EPriceCompanySelectionDialog are used internally by components
+from ui_components.eps_section_widget import EPSSectionWidget
+from ui_components.quote_selection_widget import QuoteSelectionWidget
+from ui_components.quote_details_widget import QuoteDetailsWidget
+from ui_components.eprice_section_widget import EPriceSectionWidget
+from ui_components.pe_section_widget import PESectionWidget
+from ui_components.record_report_section_widget import RecordReportSectionWidget
+from ui_components.eps_growth_chart_widget import EPSGrowthChartWidget
 from custom_widgets import FocusAwareLineEdit, HighlightableGroupBox # Import custom widgets
 from commands import (Command, ChangeRootDateCommand, ChangeQuoteDetailCommand, 
                       ChangeEPriceValueCommand, ChangePEValueCommand, AddQuoteCommand, RemoveQuoteCommand,
@@ -140,6 +145,7 @@ class XmlReportEditor(QMainWindow):
         self.pe_section_widget = PESectionWidget(lambda: self.EPRICE_FIXED_COMPANIES, self) # PE uses same fixed list
         self.pe_section_widget.peValueChanged.connect(self._handle_pe_value_changed) # Connect PE specific signal
         self.record_report_section_widget = RecordReportSectionWidget(lambda: self.EPRICE_FIXED_COMPANIES, self)
+        self.eps_growth_chart_widget = EPSGrowthChartWidget(self) # Instantiate the chart widget
         self.record_report_section_widget.recordReportAddRequested.connect(self._handle_record_report_add_requested)
         self.record_report_section_widget.recordReportRemoveRequested.connect(self._handle_record_report_remove_requested)
         self.record_report_section_widget.recordReportDetailChanged.connect(self._handle_record_report_detail_changed)
@@ -167,6 +173,7 @@ class XmlReportEditor(QMainWindow):
         column2_layout.addWidget(self.eprice_section_widget)
         column2_layout.addWidget(self.eps_section_widget)
         column2_layout.addWidget(self.pe_section_widget)
+        column2_layout.addWidget(self.eps_growth_chart_widget) # Add chart widget to column 2
         column2_layout.addStretch() # Add stretch to push content upwards
         
         two_column_main_layout.addWidget(column1_widget, 3) 
@@ -193,6 +200,7 @@ class XmlReportEditor(QMainWindow):
         self.eps_section_widget.setEnabled(enabled)
         self.pe_section_widget.setEnabled(enabled)
         self.record_report_section_widget.setEnabled(enabled)
+        self.eps_growth_chart_widget.setEnabled(enabled)
         self.quote_selection_widget.remove_quote_button.setEnabled(enabled and bool(self.selected_quote_name))
 
     def _create_menu_bar(self):
@@ -574,6 +582,7 @@ class XmlReportEditor(QMainWindow):
         self.eps_section_widget.clear_data()
         self.pe_section_widget.clear_data()
         self.pe_section_widget.refresh_structure() # Rebuild with fixed companies, clear values
+        self.eps_growth_chart_widget.clear_data()
         self.record_report_section_widget.clear_data()
 
     def _display_quote(self, quote_name, is_new_quote=False):
@@ -598,6 +607,7 @@ class XmlReportEditor(QMainWindow):
         self.eprice_section_widget.load_data(quote_data.get("e_price", []))
         self.eps_section_widget.load_data(quote_data.get("eps", []))
         self.pe_section_widget.load_data(quote_data.get("pe", []))
+        self.eps_growth_chart_widget.load_data(quote_data.get("eps", [])) # Load data into chart
         self.record_report_section_widget.load_data(quote_data.get("record", []))
         
         self.quote_selection_widget.set_quote_name_input(quote_name)
@@ -749,22 +759,50 @@ class XmlReportEditor(QMainWindow):
 
     def collect_data_for_xml(self): 
         self._save_displayed_quote_data() 
-        all_data = {"quotes": []}
-        all_data["date"] = self.root_date_edit.date().toString("MM/dd/yyyy")
-        for quote_name, quote_data_dict in self.all_quotes_data.items():
+        
+        # Initialize the structure for XML generation
+        xml_output_data = {"quotes": []}
+        
+        # Get the global date directly from the UI element
+        xml_output_data["date"] = self.root_date_edit.date().toString("MM/dd/yyyy")
+        
+        # Iterate over items in self.all_quotes_data
+        for key, value in self.all_quotes_data.items():
+            # If the key is "date", it's the global date string stored in self.all_quotes_data,
+            # skip it as the XML date is already sourced from root_date_edit.
+            if key == "date":
+                continue
+            
+            # Otherwise, the key is a quote_name and the value should be the quote_data_dict
+            quote_name = key
+            quote_data_dict = value
+            
             # Ensure the name in the dict matches the key, or use the key if name is missing
-            if "name" not in quote_data_dict or not quote_data_dict["name"]:
-                quote_data_dict["name"] = quote_name
-            all_data["quotes"].append(quote_data_dict)
-        return all_data
-
-    def save_xml_file(self):
-        if self.file_manager.save_file(self.collect_data_for_xml):
+            if isinstance(quote_data_dict, dict):
+                if "name" not in quote_data_dict or not quote_data_dict["name"]:
+                    quote_data_dict["name"] = quote_name # Ensure consistency
+                xml_output_data["quotes"].append(quote_data_dict)
+            else:
+                # This case should ideally not be reached if only "date" and quote dicts are in self.all_quotes_data
+                print(f"Warning: Skipping unexpected data type for key '{quote_name}' in collect_data_for_xml. Found type: {type(quote_data_dict)}")
+                
+        return xml_output_data
+    
+    def _perform_save_operation(self, save_function_callable):
+        """
+        Helper method to perform a save operation (save or save as)
+        and handle post-save UI updates.
+        Args:
+            save_function_callable: The FileManager method to call (e.g., self.file_manager.save_file)
+        Returns:
+            bool: True if save was successful, False otherwise.
+        """
+        if save_function_callable(self.collect_data_for_xml):
             self.undo_stack.clear() # Consider saved state as clean for undo
             self._update_undo_redo_actions_state()
             self._set_dirty_flag(False)
             return True
-        return False 
+        return False # Return False if save_function_callable failed
 
     def save_xml_file(self):
         return self._perform_save_operation(self.file_manager.save_file)

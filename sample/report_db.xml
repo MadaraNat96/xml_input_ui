@@ -148,12 +148,12 @@
                     <company>
                         <name>SHS</name>
                         <value>6000</value>
-                        <growth/>
+                        <growth>3%</growth>
                     </company>
                     <company>
                         <name>BVSC</name>
                         <value>5000</value>
-                        <growth/>
+                        <growth>100%</growth>
                     </company>
                     <company>
                         <name>VCBS</name>
@@ -168,7 +168,7 @@
                     <company>
                         <name>VDSC</name>
                         <value/>
-                        <growth/>
+                        <growth>20%</growth>
                     </company>
                     <company>
                         <name>MBS</name>
@@ -183,7 +183,7 @@
                     <company>
                         <name>SSI</name>
                         <value>3000</value>
-                        <growth/>
+                        <growth>3%</growth>
                     </company>
                     <company>
                         <name>TPS</name>
@@ -193,7 +193,7 @@
                     <company>
                         <name>BSC</name>
                         <value>4000</value>
-                        <growth/>
+                        <growth>35%</growth>
                     </company>
                     <company>
                         <name>AGRI</name>
@@ -203,12 +203,12 @@
                     <company>
                         <name>ABS</name>
                         <value/>
-                        <growth/>
+                        <growth>-5%</growth>
                     </company>
                     <company>
                         <name>VCSC</name>
                         <value/>
-                        <growth/>
+                        <growth>5%</growth>
                     </company>
                     <company>
                         <name>ACBS</name>
@@ -223,7 +223,7 @@
                     <company>
                         <name>PHS</name>
                         <value/>
-                        <growth/>
+                        <growth>7%</growth>
                     </company>
                     <company>
                         <name>CTS</name>
@@ -233,7 +233,7 @@
                     <company>
                         <name>AAS</name>
                         <value/>
-                        <growth/>
+                        <growth>3%</growth>
                     </company>
                     <company>
                         <name>DSC</name>
@@ -243,7 +243,7 @@
                     <company>
                         <name>SSV</name>
                         <value/>
-                        <growth/>
+                        <growth>40%</growth>
                     </company>
                     <company>
                         <name>VPBANKS</name>
@@ -253,7 +253,7 @@
                     <company>
                         <name>LPBS</name>
                         <value/>
-                        <growth/>
+                        <growth>3%</growth>
                     </company>
                     <company>
                         <name>FIIN</name>
