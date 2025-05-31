@@ -141,6 +141,7 @@ class XmlReportEditor(QMainWindow):
         self.eps_section_widget.epsYearRemoveRequested.connect(self._handle_eps_year_remove_requested)
         self.eps_section_widget.epsYearDisplayChangeRequested.connect(self._handle_eps_year_display_change_requested)
         self.eps_section_widget.epsCompaniesForYearDisplayChangeRequested.connect(self._handle_eps_companies_for_year_display_change_requested)
+        self.eps_section_widget.epsGrowthDataPotentiallyChanged.connect(self._handle_eps_growth_data_changed_for_chart)
         
         self.pe_section_widget = PESectionWidget(lambda: self.EPRICE_FIXED_COMPANIES, self) # PE uses same fixed list
         self.pe_section_widget.peValueChanged.connect(self._handle_pe_value_changed) # Connect PE specific signal
@@ -377,6 +378,17 @@ class XmlReportEditor(QMainWindow):
                                     field_name, old_value, new_value)
         self.execute_command(cmd)
 
+    def _handle_eps_growth_data_changed_for_chart(self, year_name_changed):
+        """
+        Called when EPS growth data might have changed for a specific year.
+        If this year is currently displayed in the chart, refresh the chart.
+        """
+        if not self.selected_quote_name: # No quote selected, chart shouldn't be active
+            return
+        if self.eps_growth_chart_widget._selected_year_for_chart == year_name_changed:
+            # The chart's internal _all_eps_data_for_current_quote should be up-to-date
+            # as it references the list from self.all_quotes_data.
+            self.eps_growth_chart_widget.update_chart(year_name_changed)
     def _handle_eps_year_add_requested(self, year_name):
         if not self.selected_quote_name: return
         # initial_companies_data is None, so _add_eps_year_fields will populate with fixed companies

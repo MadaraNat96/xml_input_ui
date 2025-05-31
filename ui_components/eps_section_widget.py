@@ -17,6 +17,7 @@ class EPSSectionWidget(QWidget):
     epsYearDisplayChangeRequested = pyqtSignal(list, list)
     epsCompaniesForYearDisplayChangeRequested = pyqtSignal(str, list, list)
     epsValueChanged = pyqtSignal(str, str, str, str, str)
+    epsGrowthDataPotentiallyChanged = pyqtSignal(str) # year_name
 
     def __init__(self, fixed_companies_provider, parent=None):
         super().__init__(parent)
@@ -219,6 +220,8 @@ class EPSSectionWidget(QWidget):
                             target_edit.setText(value)
                             target_edit.blockSignals(False)
                             ce[current_key] = value
+                            if field_name == "growth":
+                                self.epsGrowthDataPotentiallyChanged.emit(year_name)
                         return
 
     def _update_visible_eps_companies_for_year(self, year_entry_data):
