@@ -17,6 +17,7 @@ from commands import (Command, ChangeRootDateCommand, ChangeQuoteDetailCommand,
                       ChangeEPSYearDisplayCommand, ChangeEPSCompaniesForYearDisplayCommand,
                       AddRecordReportCommand, RemoveRecordReportCommand, ChangeRecordReportDetailCommand,
                       ChangeEPriceFixedCompaniesCommand)
+from file_manager import FileManager # Import the new FileManager
 import data_utils 
 
 
@@ -25,7 +26,7 @@ class XmlReportEditor(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("XML Report Editor")
-        self.current_file_path = None
+        # self.current_file_path = None # Now managed by FileManager
         self.setGeometry(100, 100, 800, 700)
 
         self.undo_stack = []
@@ -40,6 +41,7 @@ class XmlReportEditor(QMainWindow):
         self.globally_focused_company_widgets = {} # {company_name: set(QLineEdit_widgets)}
         self.active_highlighted_company = None
 
+        self.file_manager = FileManager(self) # Instantiate FileManager
         
         self.init_ui() 
         self.load_initial_data() 
@@ -245,8 +247,8 @@ class XmlReportEditor(QMainWindow):
 
     def _set_dirty_flag(self, dirty):
         title = "XML Report Editor"
-        if self.current_file_path:
-            title += f" - {os.path.basename(self.current_file_path)}"
+        if self.file_manager.get_current_file_path():
+            title += f" - {os.path.basename(self.file_manager.get_current_file_path())}"
         if dirty:
             title += "*"
         self.setWindowTitle(title)
@@ -560,7 +562,7 @@ class XmlReportEditor(QMainWindow):
         self.quote_selection_widget.clear_input()
         self._set_displayed_quote_ui_enabled(False)
         self.current_file_path = None
-        self.undo_stack.clear()
+        self.undo_stack.clear() # Clear undo stack on clearing all fields
         self.redo_stack.clear()
         self._update_undo_redo_actions_state()
         self._set_dirty_flag(False)
@@ -714,56 +716,50 @@ class XmlReportEditor(QMainWindow):
 
 
     def open_xml_file(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Open XML File", "", "XML Files (*.xml);;All Files (*)")
-        if file_path:
-            self.load_xml_file_data(file_path) 
+        # Use FileManager to open and parse the file
+        file_path, root_date_qdate, all_quotes_data_dict = self.file_manager.open_file()
+        
+        if file_path: # FileManager.open_file returns file_path if successful
+            self._load_data_into_ui(root_date_qdate, all_quotes_data_dict)
+            self._set_dirty_flag(False) # Freshly loaded file is not dirty
+            self.undo_stack.clear()
+            self.redo_stack.clear()
+            self._update_undo_redo_actions_state()
 
-    def load_xml_file_data(self, file_path): 
+    def _load_data_into_ui(self, root_date_qdate, all_quotes_data_dict):
+        """Helper to load parsed data into the UI elements."""
         self.clear_all_fields() 
-
-        root_date_qdate, all_quotes_data_dict = data_utils.parse_xml_data(file_path)
-
-        if root_date_qdate is None and all_quotes_data_dict is None: 
-            return
 
         self.root_date_edit.setDate(root_date_qdate)
         self._current_root_date_str = root_date_qdate.toString("MM/dd/yyyy")
         self.all_quotes_data = all_quotes_data_dict if all_quotes_data_dict is not None else {}
-
+        # Ensure global date is in all_quotes_data if not present from XML
+        if "date" not in self.all_quotes_data:
+            self.all_quotes_data["date"] = self._current_root_date_str
 
         first_quote_name_loaded = None
         if self.all_quotes_data:
             first_quote_name_loaded = next(iter(self.all_quotes_data), None) 
         
         if first_quote_name_loaded:
-            self._display_quote(first_quote_name_loaded, is_new_quote=False)
+            self._display_quote(first_quote_name_loaded, is_new_quote=False) # Display the first quote
         else: 
             self._set_displayed_quote_ui_enabled(False) 
-
-        self.current_file_path = file_path
-        self.undo_stack.clear()
-        self.redo_stack.clear()
-        self._update_undo_redo_actions_state()
-        self._set_dirty_flag(False) # Freshly loaded file is not dirty
+        # Window title will be updated by _set_dirty_flag via open_xml_file
 
     def collect_data_for_xml(self): 
         self._save_displayed_quote_data() 
         all_data = {"quotes": []}
         all_data["date"] = self.root_date_edit.date().toString("MM/dd/yyyy")
         for quote_name, quote_data_dict in self.all_quotes_data.items():
-            if not quote_data_dict.get("name"):
-                 QMessageBox.warning(self, "Data Error", f"Quote '{quote_name}' missing name. Skipping.")
-                 continue 
+            # Ensure the name in the dict matches the key, or use the key if name is missing
+            if "name" not in quote_data_dict or not quote_data_dict["name"]:
+                quote_data_dict["name"] = quote_name
             all_data["quotes"].append(quote_data_dict)
         return all_data
 
-    def _perform_save(self, file_path_to_save):
-        collected_data = self.collect_data_for_xml() 
-        root_element = data_utils.build_xml_tree(collected_data)
-        
-        if data_utils.save_xml_to_file(file_path_to_save, root_element):
-            QMessageBox.information(self, "Success", f"XML saved to {file_path_to_save}")
-            self.current_file_path = file_path_to_save 
+    def save_xml_file(self):
+        if self.file_manager.save_file(self.collect_data_for_xml):
             self.undo_stack.clear() # Consider saved state as clean for undo
             self._update_undo_redo_actions_state()
             self._set_dirty_flag(False)
@@ -771,21 +767,10 @@ class XmlReportEditor(QMainWindow):
         return False 
 
     def save_xml_file(self):
-        file_path_to_save = self.current_file_path
-        if not file_path_to_save: 
-            default_save_path = os.path.join(os.getcwd(), "report_output.xml") 
-            file_path_dialog, _ = QFileDialog.getSaveFileName(
-                self, "Save XML File As", default_save_path, "XML Files (*.xml);;All Files (*)")
-            if not file_path_dialog: return
-            file_path_to_save = file_path_dialog
-        self._perform_save(file_path_to_save)
+        return self._perform_save_operation(self.file_manager.save_file)
 
     def save_xml_file_as(self):
-        default_save_path = self.current_file_path if self.current_file_path else os.path.join(os.getcwd(), "report_output.xml")
-        file_path_dialog, _ = QFileDialog.getSaveFileName(
-            self, "Save XML File As", default_save_path, "XML Files (*.xml);;All Files (*)")
-        if not file_path_dialog: return
-        self._perform_save(file_path_dialog)
+        return self._perform_save_operation(self.file_manager.save_file_as)
 
     def undo(self):
         if not self.undo_stack:
