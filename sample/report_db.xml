@@ -4,7 +4,7 @@
     <quotes>
         <quote>
             <name>BID</name>
-            <price>40000</price>
+            <price>40001</price>
             <e_price>
                 <company>
                     <name>SSI</name>
@@ -12,7 +12,7 @@
                 </company>
                 <company>
                     <name>VCSC</name>
-                    <value>50000</value>
+                    <value>70000</value>
                 </company>
                 <company>
                     <name>CTS</name>
@@ -84,7 +84,7 @@
                     </company>
                     <company>
                         <name>VCSC</name>
-                        <value>4000</value>
+                        <value>4040</value>
                         <growth/>
                     </company>
                     <company>
@@ -269,25 +269,19 @@
             </eps>
             <pe>
                 <company>
+                    <name>VCSC</name>
+                    <value>4000</value>
+                </company>
+                <company>
                     <name>SIMP</name>
                     <value>14</value>
                 </company>
             </pe>
             <record>
                 <report>
-                    <company>MBS</company>
-                    <date>05/19/2025</date>
+                    <company>VCSC</company>
+                    <date>05/30/2025</date>
                     <color>yellow</color>
-                </report>
-                <report>
-                    <company>SHS</company>
-                    <date>05/27/2025</date>
-                    <color>green</color>
-                </report>
-                <report>
-                    <company>SSI</company>
-                    <date>05/09/2025</date>
-                    <color>red</color>
                 </report>
                 <report>
                     <company>LPBS</company>
@@ -295,9 +289,19 @@
                     <color>red</color>
                 </report>
                 <report>
-                    <company>VCSC</company>
-                    <date>05/30/2025</date>
+                    <company>SHS</company>
+                    <date>05/27/2025</date>
+                    <color>green</color>
+                </report>
+                <report>
+                    <company>MBS</company>
+                    <date>05/19/2025</date>
                     <color>yellow</color>
+                </report>
+                <report>
+                    <company>SSI</company>
+                    <date>05/09/2025</date>
+                    <color>red</color>
                 </report>
             </record>
         </quote>
@@ -321,7 +325,21 @@
         </quote>
         <quote>
             <name>SSI</name>
-            <price>30000</price>
+            <price>33000</price>
+            <e_price>
+                <company>
+                    <name>ACBS</name>
+                    <value>40000</value>
+                </company>
+                <company>
+                    <name>PHS</name>
+                    <value>90000</value>
+                </company>
+                <company>
+                    <name>DSC</name>
+                    <value>90000</value>
+                </company>
+            </e_price>
             <record>
                 <report>
                     <company>KBSV</company>

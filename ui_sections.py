@@ -9,6 +9,19 @@ from dialogs import EPSYearSelectionDialog, EPriceCompanySelectionDialog # Reusi
 from custom_widgets import FocusAwareLineEdit, HighlightableGroupBox # Import custom widgets
 import data_utils # For default date
 
+# Helper function to clear widgets from a layout
+def _clear_qt_layout(layout):
+    """Recursively clears all widgets and sub-layouts from a given layout."""
+    if layout is not None:
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+            else:
+                sub_layout = item.layout()
+                if sub_layout is not None:
+                    _clear_qt_layout(sub_layout) # Recursive call
 
 
 class EPSSectionWidget(QWidget):
@@ -16,6 +29,11 @@ class EPSSectionWidget(QWidget):
     # Defined as class attributes for clarity and standard practice
     companyLineEditFocusGained = pyqtSignal(str, QLineEdit) # company_name, QLineEdit instance
     companyLineEditFocusLost = pyqtSignal(str, QLineEdit)   # company_name, QLineEdit instance
+    epsYearAddRequested = pyqtSignal(str) # year_name
+    epsYearRemoveRequested = pyqtSignal(str) # year_name
+    epsYearDisplayChangeRequested = pyqtSignal(list, list) # old_selected_years, new_selected_years
+    epsCompaniesForYearDisplayChangeRequested = pyqtSignal(str, list, list) # year_name, old_list, new_list
+    epsValueChanged = pyqtSignal(str, str, str, str, str) # year_name, company_name, field_name, old_value, new_value
 
     def __init__(self, fixed_companies_provider, parent=None):
         super().__init__(parent)
@@ -85,7 +103,7 @@ class EPSSectionWidget(QWidget):
         ]
 
     def clear_data(self):
-        self._clear_layout_widgets(self.eps_items_layout)
+        _clear_qt_layout(self.eps_items_layout)
         self.eps_year_entries.clear()
         self.selected_eps_years_to_display.clear()
         self._update_visible_eps_years()
@@ -97,34 +115,34 @@ class EPSSectionWidget(QWidget):
         Preserves existing data.
         """
         self.fixed_companies_provider = new_fixed_companies_list # Update internal reference
+
+        # Store current per-year company selections
+        stored_per_year_selections = {
+            entry["year_name"]: list(entry["selected_companies_to_display_for_year"])
+            for entry in self.eps_year_entries
+        }
+
         current_eps_data = self.get_data() # Get data in the format suitable for load_data
-        
+
         # Clear existing UI elements and internal state related to year entries
-        # but keep self.selected_eps_years_to_display
-        self._clear_layout_widgets(self.eps_items_layout)
+        _clear_qt_layout(self.eps_items_layout)
         self.eps_year_entries.clear()
-        
-        # For each year in current_eps_data, we need to re-initialize its
-        # selected_companies_to_display_for_year to the new fixed_companies_provider list.
-        # This will be handled naturally by load_data -> _add_eps_year_fields
-        # which initializes selected_companies_to_display_for_year.
-        
+
         # Reload the data. load_data will use the new fixed_companies_provider
         # to structure the company boxes within each year.
+        # _add_eps_year_fields (called by load_data) will initialize
+        # selected_companies_to_display_for_year to the new full fixed_companies_provider list.
         self.load_data(current_eps_data)
-        # After loading, ensure visibility per year is updated based on their individual selections
-        # (which would have been reset to all fixed companies during load_data)
-        # _update_visible_eps_years is called at the end of load_data
 
-    def _clear_layout_widgets(self, layout):
-        if layout is not None:
-            while layout.count():
-                item = layout.takeAt(0)
-                widget = item.widget()
-                if widget is not None: widget.deleteLater() 
-                else:
-                    sub_layout = item.layout()
-                    if sub_layout is not None: self._clear_layout_widgets(sub_layout)
+        # Restore and filter per-year selections
+        for year_entry in self.eps_year_entries:
+            year_name = year_entry["year_name"]
+            if year_name in stored_per_year_selections:
+                original_selection = stored_per_year_selections[year_name]
+                year_entry["selected_companies_to_display_for_year"] = [
+                    comp for comp in original_selection if comp in self.fixed_companies_provider
+                ]
+            self._update_visible_eps_companies_for_year(year_entry) # Update UI for this year
 
     def _add_eps_year_fields(self, year_name_str="", companies_data_list=None):
         if not year_name_str: 
@@ -182,8 +200,7 @@ class EPSSectionWidget(QWidget):
         year_entry_data["companies_layout"] = companies_layout
 
         remove_year_button.clicked.connect(
-            lambda: (self._remove_dynamic_list_entry(year_entry_data, self.eps_year_entries), 
-                     self._update_visible_eps_years())
+            lambda: self.epsYearRemoveRequested.emit(year_entry_data["year_name"])
         )
 
         year_main_layout.addLayout(companies_layout) # Add the companies layout directly
@@ -218,7 +235,7 @@ class EPSSectionWidget(QWidget):
     def _handle_add_new_eps_year_dialog(self):
         year_name, ok = QInputDialog.getText(self, "New EPS Year", "Enter Year Name (e.g., 2024):")
         if ok and year_name:
-            self._add_eps_year_fields(year_name_str=year_name.strip())
+            self.epsYearAddRequested.emit(year_name.strip())
 
     def _add_eps_company_to_year_ui(self, year_entry_data, company_name_str, company_value_str="", company_growth_str=""):
         # company_name_str is now guaranteed by fixed_companies_provider
@@ -246,19 +263,41 @@ class EPSSectionWidget(QWidget):
         company_value_edit.focusGainedSignal.connect(self.companyLineEditFocusGained)
         company_value_edit.focusLostSignal.connect(self.companyLineEditFocusLost)
         
+        
         company_growth_edit = FocusAwareLineEdit(company_name=company_name_str, text=company_growth_str)
         company_growth_edit.setAlignment(Qt.AlignmentFlag.AlignRight)
         company_growth_edit.focusGainedSignal.connect(self.companyLineEditFocusGained)
         company_growth_edit.focusLostSignal.connect(self.companyLineEditFocusLost)
         form_layout.addRow("Value:", company_value_edit)
         form_layout.addRow("Growth:", company_growth_edit)
-        gbox_main_layout.addLayout(form_layout)
 
         company_data = {
             "name": company_name_str,  
             "value_edit": company_value_edit,
-            "growth_edit": company_growth_edit, "widget": company_group_box
+            "growth_edit": company_growth_edit, "widget": company_group_box,
+            "current_value": company_value_str, # Track current value for "value" field
+            "current_growth": company_growth_str # Track current value for "growth" field
         }
+        
+        # Connect editingFinished for value and growth
+        company_value_edit.editingFinished.connect(
+            lambda le=company_value_edit, ed=company_data, y_name=year_entry_data["year_name"], f_name="value":
+            self._handle_eps_value_changed(le, ed, y_name, f_name)
+        )
+        company_value_edit.returnPressed.connect(
+             lambda le=company_value_edit, ed=company_data, y_name=year_entry_data["year_name"], f_name="value":
+            self._handle_eps_value_changed(le, ed, y_name, f_name)
+        )
+        company_growth_edit.editingFinished.connect(
+            lambda le=company_growth_edit, ed=company_data, y_name=year_entry_data["year_name"], f_name="growth":
+            self._handle_eps_value_changed(le, ed, y_name, f_name)
+        )
+        company_growth_edit.returnPressed.connect(
+            lambda le=company_growth_edit, ed=company_data, y_name=year_entry_data["year_name"], f_name="growth":
+            self._handle_eps_value_changed(le, ed, y_name, f_name)
+        )
+        gbox_main_layout.addLayout(form_layout)
+
         # Removed: connect for remove_company_button
         year_entry_data["companies_layout"].addWidget(company_group_box)
         year_entry_data["company_entries"].append(company_data)
@@ -273,8 +312,43 @@ class EPSSectionWidget(QWidget):
             self
         )
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            year_entry_data["selected_companies_to_display_for_year"] = dialog.get_selected_companies()
-            self._update_visible_eps_companies_for_year(year_entry_data)
+            new_selection = dialog.get_selected_companies()
+            old_selection = list(year_entry_data["selected_companies_to_display_for_year"]) # Make a copy
+            self.epsCompaniesForYearDisplayChangeRequested.emit(year_entry_data["year_name"], old_selection, new_selection)
+
+    def _handle_eps_value_changed(self, line_edit_widget, company_entry_data, year_name, field_name):
+        new_value = line_edit_widget.text().strip()
+        old_value = ""
+        if field_name == "value":
+            old_value = company_entry_data.get("current_value", "")
+        elif field_name == "growth":
+            old_value = company_entry_data.get("current_growth", "")
+
+        if new_value != old_value:
+            self.epsValueChanged.emit(year_name, company_entry_data["name"], field_name, old_value, new_value)
+            # The command will update current_value/current_growth via update_company_eps_field
+
+    def update_company_eps_field(self, year_name, company_name, field_name, value, from_command=False):
+        """Updates a specific EPS field (value or growth) for a company in a year and its internal tracker."""
+        for year_entry in self.eps_year_entries:
+            if year_entry["year_name"] == year_name:
+                for company_entry in year_entry["company_entries"]:
+                    if company_entry["name"] == company_name:
+                        target_line_edit = None
+                        current_value_key = None
+                        if field_name == "value":
+                            target_line_edit = company_entry["value_edit"]
+                            current_value_key = "current_value"
+                        elif field_name == "growth":
+                            target_line_edit = company_entry["growth_edit"]
+                            current_value_key = "current_growth"
+                        
+                        if target_line_edit and current_value_key:
+                            target_line_edit.blockSignals(True)
+                            target_line_edit.setText(value)
+                            target_line_edit.blockSignals(False)
+                            company_entry[current_value_key] = value
+                        return # Found and updated
 
     def _update_visible_eps_companies_for_year(self, year_entry_data):
         if not year_entry_data or "company_entries" not in year_entry_data:
@@ -367,8 +441,9 @@ class EPSSectionWidget(QWidget):
         dialog = EPSYearSelectionDialog(all_year_names, self.selected_eps_years_to_display, self)
         
         if dialog.exec() == QDialog.DialogCode.Accepted: 
-            self.selected_eps_years_to_display = dialog.get_selected_years()
-            self._update_visible_eps_years()
+            new_selection = dialog.get_selected_years()
+            old_selection = list(self.selected_eps_years_to_display) # Make a copy
+            self.epsYearDisplayChangeRequested.emit(old_selection, new_selection)
 
     def setEnabled(self, enabled):
         """Override setEnabled to control the group box."""
@@ -447,12 +522,19 @@ class QuoteSelectionWidget(QWidget):
         super().setEnabled(enabled)
 
 class QuoteDetailsWidget(QWidget):
+    # Signals to inform the main editor about confirmed changes
+    quoteNameChanged = pyqtSignal(str, str)  # old_name, new_name
+    quotePriceChanged = pyqtSignal(str, str) # old_price, new_price
+
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._current_name = ""
+        self._current_price = ""
         self._init_ui()
 
     def _init_ui(self):
         self.details_group = QGroupBox("Quote Details")
+        self.details_group.setEnabled(False) # Initially disabled
         details_form_layout = QFormLayout(self.details_group)
         self.name_edit = QLineEdit()
         self.price_edit = QLineEdit()
@@ -463,27 +545,74 @@ class QuoteDetailsWidget(QWidget):
         main_layout.setContentsMargins(0,0,0,0)
         main_layout.addWidget(self.details_group)
 
+        # Connect editingFinished signals
+        self.name_edit.editingFinished.connect(self._handle_name_editing_finished)
+        self.name_edit.returnPressed.connect(self._handle_name_editing_finished) # Explicitly handle Enter
+        self.price_edit.editingFinished.connect(self._handle_price_editing_finished)
+        self.price_edit.returnPressed.connect(self._handle_price_editing_finished) # Explicitly handle Enter
+
+    def _handle_name_editing_finished(self):
+        new_name = self.name_edit.text().strip()
+        if not self.name_edit.isReadOnly() and new_name != self._current_name:
+            self.quoteNameChanged.emit(self._current_name, new_name)
+            # self._current_name will be updated by the command execution via update_field_value
+
+    def _handle_price_editing_finished(self):
+        new_price = self.price_edit.text().strip()
+        if not self.price_edit.isReadOnly() and new_price != self._current_price:
+            self.quotePriceChanged.emit(self._current_price, new_price)
+            # self._current_price will be updated by the command execution via update_field_value
+
     def load_data(self, name, price, is_new_quote):
         self.name_edit.setText(name)
         self.price_edit.setText(price)
+        self._current_name = name
+        self._current_price = price
+
         self.name_edit.setReadOnly(not is_new_quote)
-        self.price_edit.setReadOnly(not is_new_quote) # Price should also be editable for new quote
+        self.price_edit.setReadOnly(False) # Price is always editable when a quote is displayed
+        self.details_group.setEnabled(True)
 
     def get_data(self):
         return self.name_edit.text(), self.price_edit.text()
 
     def clear_data(self):
+        self.name_edit.blockSignals(True)
+        self.price_edit.blockSignals(True)
         self.name_edit.clear()
         self.price_edit.clear()
+        self.name_edit.blockSignals(False)
+        self.price_edit.blockSignals(False)
+        self._current_name = ""
+        self._current_price = ""
+        self.details_group.setEnabled(False)
+
+    def update_field_value(self, field_name, value, from_command=False):
+        """
+        Updates a field's value and its internal tracker.
+        Called by commands during execute/unexecute.
+        """
+        if field_name == "name":
+            self.name_edit.blockSignals(True)
+            self.name_edit.setText(value)
+            self.name_edit.blockSignals(False)
+            self._current_name = value
+        elif field_name == "price":
+            self.price_edit.blockSignals(True)
+            self.price_edit.setText(value)
+            self.price_edit.blockSignals(False)
+            self._current_price = value
 
     def setEnabled(self, enabled):
         self.details_group.setEnabled(enabled)
+        # The QLineEdit read-only state is managed by load_data
         super().setEnabled(enabled)
 
 
 class EPriceSectionWidget(QWidget):
     companyFocusGained = pyqtSignal(str, QLineEdit)
     companyFocusLost = pyqtSignal(str, QLineEdit)
+    ePriceValueChanged = pyqtSignal(str, str, str) # company_name, old_value, new_value
 
     def __init__(self, fixed_companies_provider_func, parent=None):
         super().__init__(parent)
@@ -516,12 +645,6 @@ class EPriceSectionWidget(QWidget):
         main_layout.addWidget(self.eprice_group)
         self.refresh_structure() # Initial build
 
-    def _clear_layout_widgets(self, layout):
-        if layout is not None:
-            while layout.count():
-                item = layout.takeAt(0)
-                widget = item.widget()
-                if widget is not None: widget.deleteLater()
 
     def _create_company_ui(self, company_name_str, value_str=""):
         company_group_box = HighlightableGroupBox(company_name=company_name_str, title=company_name_str)
@@ -533,11 +656,21 @@ class EPriceSectionWidget(QWidget):
         form_layout.setContentsMargins(0,0,0,0)
         value_edit = FocusAwareLineEdit(company_name=company_name_str, text=value_str)
         value_edit.setAlignment(Qt.AlignmentFlag.AlignRight)
+        
+        entry_data = {
+            "name": company_name_str, 
+            "value_edit": value_edit, 
+            "widget": company_group_box,
+            "current_value": value_str # Initialize current_value
+        }
+
         value_edit.focusGainedSignal.connect(self.companyFocusGained)
         value_edit.focusLostSignal.connect(self.companyFocusLost)
+        # Connect editingFinished to handle value changes
+        value_edit.editingFinished.connect(lambda le=value_edit, ed=entry_data: self._handle_eprice_value_changed(le, ed))
+        value_edit.returnPressed.connect(lambda le=value_edit, ed=entry_data: self._handle_eprice_value_changed(le, ed))
         form_layout.addRow(value_edit)
         gbox_main_layout.addLayout(form_layout)
-        entry_data = {"name": company_name_str, "value_edit": value_edit, "widget": company_group_box}
         self.eprice_items_layout.addWidget(company_group_box)
         self.eprice_entries.append(entry_data)
 
@@ -545,7 +678,7 @@ class EPriceSectionWidget(QWidget):
         fixed_companies = new_fixed_companies if new_fixed_companies is not None else self.fixed_companies_provider_func()
         
         current_values = {entry["name"]: entry["value_edit"].text() for entry in self.eprice_entries}
-        self._clear_layout_widgets(self.eprice_items_layout)
+        _clear_qt_layout(self.eprice_items_layout)
         self.eprice_entries.clear()
 
         self.selected_eprice_companies_to_display = list(fixed_companies) # Default to all
@@ -554,10 +687,18 @@ class EPriceSectionWidget(QWidget):
             self._create_company_ui(company_name, current_values.get(company_name, ""))
         self._update_visible_companies()
 
+    def _handle_eprice_value_changed(self, line_edit_widget, entry_data):
+        new_value = line_edit_widget.text().strip()
+        old_value = entry_data.get("current_value", "")
+        if new_value != old_value:
+            self.ePriceValueChanged.emit(entry_data["name"], old_value, new_value)
+            # entry_data["current_value"] will be updated by the command via update_company_value
+
     def load_data(self, eprice_data_list_for_quote):
         loaded_data_map = {item["name"]: item["value"] for item in eprice_data_list_for_quote}
         for entry in self.eprice_entries:
             entry["value_edit"].setText(loaded_data_map.get(entry["name"], ""))
+            entry["current_value"] = loaded_data_map.get(entry["name"], "") # Update internal tracker
 
     def get_data(self):
         data = []
@@ -570,7 +711,20 @@ class EPriceSectionWidget(QWidget):
     def clear_data(self):
         for entry in self.eprice_entries:
             entry["value_edit"].clear()
-        # self.refresh_structure() # This might be too much, just clearing values is enough
+            entry["current_value"] = "" # Clear internal tracker
+
+    def update_company_value(self, company_name, value, from_command=False):
+        """Updates a company's E-Price value and its internal tracker."""
+        for entry_data in self.eprice_entries:
+            if entry_data["name"] == company_name:
+                value_edit_widget = entry_data["value_edit"]
+                value_edit_widget.blockSignals(True)
+                value_edit_widget.setText(value)
+                value_edit_widget.blockSignals(False)
+                entry_data["current_value"] = value
+                break
+
+
 
     def _handle_choose_eprice_companies(self):
         fixed_companies = self.fixed_companies_provider_func()
@@ -604,17 +758,65 @@ class EPriceSectionWidget(QWidget):
 # You would create PESectionWidget by copying and adapting EPriceSectionWidget.
 
 class PESectionWidget(EPriceSectionWidget): # Inherit and override if needed
+    # PESectionWidget does not need to re-declare companyFocusGained/Lost as they are inherited.
+    # Define a distinct signal for PE value changes
+    peValueChanged = pyqtSignal(str, str, str) # company_name, old_value, new_value
+    
     def __init__(self, fixed_companies_provider_func, parent=None):
+        # Call the base class (EPriceSectionWidget) __init__
         super().__init__(fixed_companies_provider_func, parent)
-        self.eprice_group.setTitle("PE Companies") # Override title
-        self.choose_companies_button.setToolTip("Select which PE companies to display")
+        # The following lines were in the original __init__ of EPriceSectionWidget,
+        # so they are effectively called by super().
+        # self.fixed_companies_provider_func = fixed_companies_provider_func
+        # self.eprice_entries = []
+        # self.selected_eprice_companies_to_display = []
+        self.eprice_group.setTitle("PE Companies") # Override title from base
+        self.choose_companies_button.setToolTip("Select which PE companies to display") # Override tooltip
 
-# RecordReportSectionWidget - This one is more distinct
+    def _create_company_ui(self, company_name_str, value_str=""):
+        # This method is overridden from EPriceSectionWidget to connect
+        # the value_edit signals to _handle_pe_value_changed instead of _handle_eprice_value_changed.
+        company_group_box = HighlightableGroupBox(company_name=company_name_str, title=company_name_str)
+        company_group_box.setFixedWidth(62)
+        gbox_main_layout = QVBoxLayout(company_group_box)
+        gbox_main_layout.setContentsMargins(5, 5, 5, 5)
+        gbox_main_layout.setSpacing(2)
+        form_layout = QFormLayout()
+        form_layout.setContentsMargins(0,0,0,0)
+        value_edit = FocusAwareLineEdit(company_name=company_name_str, text=value_str)
+        value_edit.setAlignment(Qt.AlignmentFlag.AlignRight)
+        
+        entry_data = {
+            "name": company_name_str, 
+            "value_edit": value_edit, 
+            "widget": company_group_box,
+            "current_value": value_str 
+        }
+
+        value_edit.focusGainedSignal.connect(self.companyFocusGained) # Inherited signal
+        value_edit.focusLostSignal.connect(self.companyFocusLost)   # Inherited signal
+        # Connect editingFinished to handle PE value changes specifically
+        value_edit.editingFinished.connect(lambda le=value_edit, ed=entry_data: self._handle_pe_value_changed(le, ed))
+        value_edit.returnPressed.connect(lambda le=value_edit, ed=entry_data: self._handle_pe_value_changed(le, ed))
+        form_layout.addRow(value_edit)
+        gbox_main_layout.addLayout(form_layout)
+        self.eprice_items_layout.addWidget(company_group_box) # eprice_items_layout is from base
+        self.eprice_entries.append(entry_data) # eprice_entries is from base
+
+    def _handle_pe_value_changed(self, line_edit_widget, entry_data):
+        new_value = line_edit_widget.text().strip()
+        old_value = entry_data.get("current_value", "")
+        if new_value != old_value:
+            self.peValueChanged.emit(entry_data["name"], old_value, new_value)
+            # current_value will be updated by the command via update_company_value (inherited)
 class RecordReportSectionWidget(QWidget):
     MAX_REPORTS_DISPLAYED = 5 # Class constant for this section
+    recordReportAddRequested = pyqtSignal()
+    recordReportRemoveRequested = pyqtSignal(object) # Passes the entry_data dict of the UI element
+    recordReportDetailChanged = pyqtSignal(object, str, str, str) # entry_data_dict, field_name, old_value, new_value
 
     def __init__(self, fixed_companies_provider_func, parent=None):
-        super().__init__(parent)
+        super().__init__(parent) # Call QWidget's __init__
         self.fixed_companies_provider_func = fixed_companies_provider_func
         self.report_entries = [] # List of dicts: {"widget": QGroupBox, "company_combo": QComboBox, "date_edit": QDateEdit, "color": str}
         self._init_ui()
@@ -630,8 +832,8 @@ class RecordReportSectionWidget(QWidget):
         add_report_button = QPushButton()
         add_report_button.setToolTip("Add Report")
         add_report_button.setIcon(QApplication.style().standardIcon(QStyle.StandardPixmap.SP_DialogApplyButton))
-        add_report_button.setFixedSize(20,20)
-        add_report_button.clicked.connect(lambda: self.add_report_entry()) # Default add to top
+        add_report_button.setFixedSize(20, 20)
+        add_report_button.clicked.connect(self.recordReportAddRequested)
         record_actions_layout.addWidget(add_report_button)
         record_main_layout.addLayout(record_actions_layout)
 
@@ -650,10 +852,13 @@ class RecordReportSectionWidget(QWidget):
         report_entry_main_layout.setContentsMargins(4, 8, 4, 4)
         report_entry_main_layout.setSpacing(3)
 
+        # Store current values for change detection
         top_bar_layout = QHBoxLayout()
         top_bar_layout.addStretch()
 
-        current_entry_data = {"widget": report_entry_group, "color": color_str if color_str else "default"}
+        current_entry_data = {"widget": report_entry_group, 
+                              "current_color": color_str if color_str else "default",
+                              "current_company": company_str, "current_date": date_str}
 
         colors_to_add = [("R", "red"), ("G", "green"), ("Y", "yellow"), ("W", "white")]
         for btn_text, color_name in colors_to_add:
@@ -676,11 +881,15 @@ class RecordReportSectionWidget(QWidget):
         company_combo = QComboBox()
         fixed_companies = self.fixed_companies_provider_func()
         company_combo.addItems(fixed_companies)
+        initial_company_for_combo = company_str
         if company_str and company_str in fixed_companies:
             company_combo.setCurrentText(company_str)
         elif fixed_companies:
             company_combo.setCurrentIndex(0)
-            
+            initial_company_for_combo = company_combo.currentText() if company_combo.count() > 0 else ""
+        
+        current_entry_data["current_company"] = initial_company_for_combo # Update based on combo actual
+
         date_edit = QDateEdit()
         date_edit.setDisplayFormat("MM/dd/yyyy")
         date_edit.setCalendarPopup(True)
@@ -689,32 +898,59 @@ class RecordReportSectionWidget(QWidget):
             date_edit.setDate(q_date if q_date.isValid() else data_utils.get_default_working_date())
         else:
             date_edit.setDate(data_utils.get_default_working_date())
+        current_entry_data["current_date"] = date_edit.date().toString("MM/dd/yyyy") # Update based on date_edit actual
         
         form_layout.addRow("Company:", company_combo)
         form_layout.addRow("Date (MM/DD/YYYY):", date_edit)
         report_entry_main_layout.addLayout(form_layout)
 
         self.record_items_layout.insertWidget(insert_at_index, report_entry_group)
+        # Store references to widgets for later access if needed by commands or updates
         current_entry_data["company_combo"] = company_combo
         current_entry_data["date_edit"] = date_edit
         self.report_entries.insert(insert_at_index, current_entry_data)
 
-        remove_report_button.clicked.connect(lambda: self._remove_report_entry(current_entry_data))
+        # Connect signals for changes
+        company_combo.currentTextChanged.connect(
+            lambda text, ed=current_entry_data: self._handle_report_detail_change(ed, "company", text)
+        )
+        date_edit.dateChanged.connect( # Use dateChanged for calendar popup
+            lambda q_date, ed=current_entry_data: self._handle_report_detail_change(ed, "date", q_date.toString("MM/dd/yyyy"))
+        )
+        # For manual date edits, editingFinished is also good
+        date_edit.editingFinished.connect(
+            lambda ed=current_entry_data, de=date_edit: self._handle_report_detail_change(ed, "date", de.date().toString("MM/dd/yyyy"))
+        )
+
+        remove_report_button.clicked.connect(lambda: self.recordReportRemoveRequested.emit(current_entry_data))
         
-        self._apply_report_color_style(report_entry_group, current_entry_data["color"])
+        self._apply_report_color_style(report_entry_group, current_entry_data["current_color"])
         self._apply_report_display_limit()
+        return current_entry_data # Return the created entry data
+
+    def _handle_report_detail_change(self, entry_data_dict, field_name, new_value_str):
+        old_value_str = ""
+        if field_name == "company": old_value_str = entry_data_dict.get("current_company", "")
+        elif field_name == "date": old_value_str = entry_data_dict.get("current_date", "")
+        # Color is handled by _handle_report_color_change
+
+        if new_value_str != old_value_str:
+            self.recordReportDetailChanged.emit(entry_data_dict, field_name, old_value_str, new_value_str)
+            # The command will update the "current_*" field in entry_data_dict via update_report_entry_detail
 
     def _remove_report_entry(self, entry_data_dict):
         if entry_data_dict in self.report_entries:
             self.report_entries.remove(entry_data_dict)
-        widget_to_remove = entry_data_dict.get("widget")
-        if widget_to_remove:
-            widget_to_remove.deleteLater()
+            widget_to_remove = entry_data_dict.get("widget")
+            if widget_to_remove:
+                widget_to_remove.deleteLater()
         # No need to call _apply_report_display_limit here, as removal might bring it under limit
 
     def _handle_report_color_change(self, entry_data, color_name):
-        entry_data["color"] = color_name
-        self._apply_report_color_style(entry_data["widget"], color_name)
+        old_color = entry_data.get("current_color", "default")
+        if color_name != old_color:
+            self.recordReportDetailChanged.emit(entry_data, "color", old_color, color_name)
+            # Command will call update_report_entry_detail which calls _apply_report_color_style
 
     def _apply_report_color_style(self, group_box_widget, color_name):
         group_box_widget.setProperty("report_color", color_name if color_name else "default")
@@ -753,7 +989,7 @@ class RecordReportSectionWidget(QWidget):
         return [
             {"company": entry["company_combo"].currentText(),
              "date": entry["date_edit"].date().toString("MM/dd/yyyy"),
-             "color": entry.get("color", "default")}
+             "color": entry.get("current_color", "default")} # Use current_color for data model
             for entry in self.report_entries
         ]
 
@@ -776,6 +1012,30 @@ class RecordReportSectionWidget(QWidget):
                     company_combo.setCurrentText(current_selection)
                 elif fixed_companies:
                     company_combo.setCurrentIndex(0)
+
+    def update_report_entry_detail(self, report_ui_entry_data, field_name, new_value, from_command=False):
+        """Updates a specific detail of a report entry UI and its internal 'current_*' tracker."""
+        if report_ui_entry_data not in self.report_entries:
+            print(f"Error: Report UI entry data not found for update: {report_ui_entry_data}")
+            return
+
+        if field_name == "company":
+            report_ui_entry_data["company_combo"].blockSignals(True)
+            report_ui_entry_data["company_combo"].setCurrentText(new_value)
+            report_ui_entry_data["company_combo"].blockSignals(False)
+            report_ui_entry_data["current_company"] = new_value
+        elif field_name == "date":
+            q_date = QDate.fromString(new_value, "MM/dd/yyyy")
+            if q_date.isValid():
+                report_ui_entry_data["date_edit"].blockSignals(True)
+                report_ui_entry_data["date_edit"].setDate(q_date)
+                report_ui_entry_data["date_edit"].blockSignals(False)
+                report_ui_entry_data["current_date"] = new_value
+        elif field_name == "color":
+            report_ui_entry_data["current_color"] = new_value
+            self._apply_report_color_style(report_ui_entry_data["widget"], new_value)
+        
+        # Ensure the main data model (all_quotes_data) is updated by the command itself.
 
     def setEnabled(self, enabled):
         self.record_group.setEnabled(enabled)
