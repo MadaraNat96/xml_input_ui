@@ -390,31 +390,29 @@ class AddRecordReportCommand(Command):
                 quote_data["record"] = []
             quote_data["record"].append(self.report_data_to_add)
             # The main editor's _display_quote or load_data in widget will handle sorting for display
-        
-        # Add to UI and store the created UI entry data
-        self.created_ui_entry_data = self.record_widget.add_report_entry(
-            company_str=self.report_data_to_add.get("company", ""),
-            date_str=self.report_data_to_add.get("date", ""),
-            color_str=self.report_data_to_add.get("color", "default"),
-            insert_at_index=self.insert_at_index
-        )
+
+        # After adding to model, reload the widget's data
+        if self.quote_name_key in self.all_quotes_data_ref and "record" in self.all_quotes_data_ref[self.quote_name_key]:
+            self.record_widget.load_data(self.all_quotes_data_ref[self.quote_name_key]["record"])
+        else:
+            self.record_widget.clear_data() # Should not happen if quote exists
+        self.created_ui_entry_data = None # UI entry is managed by load_data now
+
         # Update description now that we have more details
         self.description = f"Add Record Report ({self.report_data_to_add.get('company', '')} on {self.report_data_to_add.get('date', '')}) to '{self.quote_name_key}'"
 
     def unexecute(self):
         if self.quote_name_key in self.all_quotes_data_ref:
-            quote_data = self.all_quotes_data_ref[self.quote_name_key]
-            if "record" in quote_data and self.report_data_to_add in quote_data["record"]:
-                quote_data["record"].remove(self.report_data_to_add)
+            current_quote_data = self.all_quotes_data_ref[self.quote_name_key]
+            if "record" in current_quote_data and self.report_data_to_add in current_quote_data["record"]:
+                current_quote_data["record"].remove(self.report_data_to_add)
         
-        # Remove the specific UI entry that was created by this command's execute()
-        if self.created_ui_entry_data:
-            self.record_widget._remove_report_entry(self.created_ui_entry_data)
-            self.created_ui_entry_data = None # Clear it after removal
+        # After removing from model, reload the widget's data to reflect changes and potentially show older reports
+        if self.quote_name_key in self.all_quotes_data_ref and "record" in self.all_quotes_data_ref[self.quote_name_key]:
+            self.record_widget.load_data(self.all_quotes_data_ref[self.quote_name_key]["record"])
         else:
-            # Fallback if created_ui_entry_data wasn't stored (should not happen with new logic)
-            # or if trying to unexecute a command that wasn't properly executed.
-            print(f"Warning: Could not find specific UI for record report to unexecute add: {self.report_data_to_add}")
+            self.record_widget.clear_data() # Should not happen if quote exists
+        self.created_ui_entry_data = None # UI entry is managed by load_data now
 
 
 class RemoveRecordReportCommand(Command):
@@ -430,13 +428,17 @@ class RemoveRecordReportCommand(Command):
 
     def execute(self):
         # Remove from data model
+        current_quote_data = None
         if self.quote_name_key in self.all_quotes_data_ref:
-            quote_data = self.all_quotes_data_ref[self.quote_name_key]
-            if "record" in quote_data and self.report_data_model_to_remove in quote_data["record"]:
-                quote_data["record"].remove(self.report_data_model_to_remove)
+            current_quote_data = self.all_quotes_data_ref[self.quote_name_key]
+            if "record" in current_quote_data and self.report_data_model_to_remove in current_quote_data["record"]:
+                current_quote_data["record"].remove(self.report_data_model_to_remove)
         
-        # Remove from UI
-        self.record_widget._remove_report_entry(self.ui_entry_data_to_remove)
+        # After removing from model, reload the widget's data to reflect changes and potentially show older reports
+        if current_quote_data and "record" in current_quote_data:
+            self.record_widget.load_data(current_quote_data["record"])
+        else: # Should not happen if quote_data was valid
+            self.record_widget.clear_data()
 
     def unexecute(self):
         # Re-add to data model at original index
@@ -451,22 +453,15 @@ class RemoveRecordReportCommand(Command):
             else:
                 quote_data["record"].append(self.report_data_model_to_remove)
             # The editor's _display_quote or load_data in widget will handle sorting for display if needed
-
-        # Re-add to UI. The add_report_entry method in widget will handle creating new UI elements.
-        # We need to determine the correct UI insertion index.
-        # For simplicity, we can re-add to top (index 0) or try to match original_data_model_index.
-        # However, the widget's load_data will typically rebuild the UI based on sorted data model.
-        # So, simply re-adding to data model and letting main editor refresh might be enough,
-        # or we can call add_report_entry directly.
-        # For now, let widget's load_data handle it after data model is updated.
-        # The main editor will call _display_quote which reloads the record section.
-        # To be more direct, we can call add_report_entry:
-        self.ui_entry_data_to_remove = self.record_widget.add_report_entry( # Re-capture the new UI entry
-            company_str=self.report_data_model_to_remove.get("company", ""),
-            date_str=self.report_data_model_to_remove.get("date", ""),
-            color_str=self.report_data_model_to_remove.get("color", "default"),
-            insert_at_index=self.original_data_model_index # Try to insert at a similar position
-        )
+        
+        # After re-adding to model, reload the widget's data
+        if self.quote_name_key in self.all_quotes_data_ref and "record" in self.all_quotes_data_ref[self.quote_name_key]:
+            self.record_widget.load_data(self.all_quotes_data_ref[self.quote_name_key]["record"])
+        else:
+            self.record_widget.clear_data() # Should not happen if quote exists
+        # self.ui_entry_data_to_remove is not directly used here as load_data rebuilds UI entries.
+        # If ChangeRecordReportDetailCommand needed to identify this specific instance later for an undo/redo chain,
+        # it would need a more robust way to track it than this command's instance variable.
 
 
 class ChangeRecordReportDetailCommand(Command):

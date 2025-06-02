@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QPointF
 from PyQt6.QtCharts import (
-    QChart, QChartView, QBarSet, QBarCategoryAxis, QValueAxis,
+    QChart, QChartView, QBarSet, QBarCategoryAxis, QValueAxis, QAbstractBarSeries,
     QStackedBarSeries, QLineSeries
 )
 from PyQt6.QtGui import QColor, QPen
@@ -86,11 +86,21 @@ class EPSGrowthChartWidget(QWidget):
 
         positive_growth_set.setColor(QColor("green"))
         negative_growth_set.setColor(QColor("red"))
+        
+        # Make labels more prominent - apply font and brush to each QBarSet
+        label_font = chart.font() # Start with chart's default font
+        label_font.setPointSize(8) # Adjust size as needed, 8 is usually readable
+        for bar_set in [positive_growth_set, negative_growth_set]:
+            bar_set.setLabelFont(label_font)
+            bar_set.setLabelBrush(QColor("black")) # Ensure labels are black
+
 
         categories = []
         year_data_to_chart = next((yd for yd in self._all_eps_data_for_current_quote if yd.get("name") == year_name), None)
         
         has_data_to_plot = False
+        sum_of_growth_values = 0.0
+        count_of_companies_with_growth = 0
 
         if year_data_to_chart and year_data_to_chart.get("companies"):
             for company_data in year_data_to_chart["companies"]:
@@ -102,6 +112,8 @@ class EPSGrowthChartWidget(QWidget):
                     try:
                         growth_val = float(growth_str)
                         has_data_to_plot = True
+                        sum_of_growth_values += growth_val
+                        count_of_companies_with_growth += 1
                     except ValueError:
                         growth_val = 0.0
                 
@@ -123,6 +135,11 @@ class EPSGrowthChartWidget(QWidget):
                        f"EPS Growth (%) for {year_name}")
 
         chart.addSeries(stacked_series)
+        # Configure labels for the series (applies to all sets in it)
+        stacked_series.setLabelsVisible(True)
+        stacked_series.setLabelsPosition(QAbstractBarSeries.LabelsPosition.LabelsOutsideEnd)
+        stacked_series.setLabelsFormat("@value%")
+
         axis_x = QBarCategoryAxis()
         axis_x.append(categories if categories else ["No Data"])
         chart.addAxis(axis_x, Qt.AlignmentFlag.AlignBottom)
@@ -143,6 +160,50 @@ class EPSGrowthChartWidget(QWidget):
             chart.addSeries(zero_line_series)
             zero_line_series.attachAxis(axis_x)
             zero_line_series.attachAxis(axis_y)
+
+            # Hide the zero line from the legend
+            legend_markers_for_zero_line = chart.legend().markers(zero_line_series)
+            for marker in legend_markers_for_zero_line:
+                marker.setVisible(False)
+
+        # Add Average Growth Line
+        if categories and count_of_companies_with_growth > 0:
+            average_growth = sum_of_growth_values / count_of_companies_with_growth
+            average_line_series = QLineSeries()
+            average_line_series.setName(f"Avg Growth: {average_growth:.2f}%")
+            average_line_series.append(QPointF(-0.5, average_growth))
+            average_line_series.append(QPointF(len(categories) - 0.5, average_growth))
+            
+            avg_pen = QPen(QColor("blue")) # Or any other distinct color
+            avg_pen.setWidth(2)
+            avg_pen.setStyle(Qt.PenStyle.DashLine)
+            average_line_series.setPen(avg_pen)
+            chart.addSeries(average_line_series)
+            average_line_series.attachAxis(axis_x)
+            average_line_series.attachAxis(axis_y)
+
+        # Adjust Y-axis for label visibility after all series are added
+        min_y = axis_y.min()
+        max_y = axis_y.max()
+
+        padding = (max_y - min_y) * 0.10 # 10% padding based on current data range
+
+        # If range is zero (e.g. all values are 0, or all values are 5), padding would be 0.
+        # Ensure a minimum padding in such cases.
+        if padding == 0:
+            padding = max(1.0, abs(max_y * 0.10)) # Use 1 unit or 10% of the value
+            if max_y == 0 : # If all values are zero, make padding symmetric
+                 padding = 1.0
+
+        final_min_y = min(min_y, 0) - padding # Ensure 0 is included and pad below
+        final_max_y = max(max_y, 0) + padding # Ensure 0 is included and pad above
+
+        # Handle case where all data points were identical (min_y == max_y initially)
+        if min_y == max_y:
+            final_min_y = min_y - padding
+            final_max_y = max_y + padding
+
+        axis_y.setRange(final_min_y, final_max_y)
 
         chart.legend().setVisible(True)
         chart.legend().setAlignment(Qt.AlignmentFlag.AlignBottom)

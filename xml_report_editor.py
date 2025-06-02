@@ -22,12 +22,13 @@ from commands import (Command, ChangeRootDateCommand, ChangeQuoteDetailCommand,
                       ChangeEPSYearDisplayCommand, ChangeEPSCompaniesForYearDisplayCommand,
                       AddRecordReportCommand, RemoveRecordReportCommand, ChangeRecordReportDetailCommand,
                       ChangeEPriceFixedCompaniesCommand)
+from editor_action_handler import EditorActionHandler # Import the new handler class
+from ui_managers import GlobalHighlightManager # Import the new manager
 from file_manager import FileManager # Import the new FileManager
 import data_utils 
 
 
 class XmlReportEditor(QMainWindow):
-    MAX_REPORTS_DISPLAYED = 5
     def __init__(self):
         super().__init__()
         self.setWindowTitle("XML Report Editor")
@@ -43,10 +44,9 @@ class XmlReportEditor(QMainWindow):
         
         # This list acts as the default if eprice_companies.cfg is missing/empty
         self.EPRICE_FIXED_COMPANIES = ["VCSC", "SSI", "MBS", "AGR", "BSC", "FPT", "CTG"] 
-        self.globally_focused_company_widgets = {} # {company_name: set(QLineEdit_widgets)}
-        self.active_highlighted_company = None
 
         self.file_manager = FileManager(self) # Instantiate FileManager
+        self.action_handler = EditorActionHandler(self) # Instantiate ActionHandler
         
         self.init_ui() 
         self.load_initial_data() 
@@ -115,49 +115,54 @@ class XmlReportEditor(QMainWindow):
         self.root_date_edit.setDisplayFormat("MM/dd/yyyy")
         self.root_date_edit.setCalendarPopup(True)
         # Store initial date for command creation
-        self._current_root_date_str = self.root_date_edit.date().toString("MM/dd/yyyy")
-        self.root_date_edit.editingFinished.connect(self._handle_root_date_changed)
+        self._current_root_date_str = self.root_date_edit.date().toString("MM/dd/yyyy") # action_handler will need this
+        self.root_date_edit.editingFinished.connect(self.action_handler.handle_root_date_changed)
         # Also connect dateChanged for calendar popup changes
-        self.root_date_edit.dateChanged.connect(self._handle_root_date_changed_by_calendar)
+        self.root_date_edit.dateChanged.connect(self.action_handler.handle_root_date_changed_by_calendar)
         date_layout.addRow(QLabel("Date (MM/DD/YYYY):"), self.root_date_edit)
         date_group.setLayout(date_layout)
         self.main_layout.addWidget(date_group)
 
         # Instantiate section widgets
         self.quote_selection_widget = QuoteSelectionWidget(self)
-        self.quote_selection_widget.selectQuoteClicked.connect(self.handle_select_quote_button)
-        self.quote_selection_widget.addQuoteClicked.connect(self.handle_add_new_quote_button)
-        self.quote_selection_widget.removeQuoteClicked.connect(self.handle_remove_displayed_quote_button)
+        self.quote_selection_widget.selectQuoteClicked.connect(self.handle_select_quote_button) # Stays in editor
+        self.quote_selection_widget.addQuoteClicked.connect(self.handle_add_new_quote_button)   # Stays in editor
+        self.quote_selection_widget.removeQuoteClicked.connect(self.handle_remove_displayed_quote_button) # Stays in editor
 
         self.quote_details_widget = QuoteDetailsWidget(self)
-        self.quote_details_widget.quoteNameChanged.connect(self._handle_quote_name_changed)
-        self.quote_details_widget.quotePriceChanged.connect(self._handle_quote_price_changed)
+        self.quote_details_widget.quoteNameChanged.connect(self.action_handler.handle_quote_name_changed)
+        self.quote_details_widget.quotePriceChanged.connect(self.action_handler.handle_quote_price_changed)
 
         self.eprice_section_widget = EPriceSectionWidget(lambda: self.EPRICE_FIXED_COMPANIES, self)
-        self.eprice_section_widget.ePriceValueChanged.connect(self._handle_eprice_value_changed)
+        self.eprice_section_widget.ePriceValueChanged.connect(self.action_handler.handle_eprice_value_changed)
         self.eps_section_widget = EPSSectionWidget(fixed_companies_provider=self.EPRICE_FIXED_COMPANIES, parent=self)
-        self.eps_section_widget.epsValueChanged.connect(self._handle_eps_value_changed)
-        self.eps_section_widget.epsYearAddRequested.connect(self._handle_eps_year_add_requested)
-        self.eps_section_widget.epsYearRemoveRequested.connect(self._handle_eps_year_remove_requested)
-        self.eps_section_widget.epsYearDisplayChangeRequested.connect(self._handle_eps_year_display_change_requested)
-        self.eps_section_widget.epsCompaniesForYearDisplayChangeRequested.connect(self._handle_eps_companies_for_year_display_change_requested)
-        self.eps_section_widget.epsGrowthDataPotentiallyChanged.connect(self._handle_eps_growth_data_changed_for_chart)
+        self.eps_section_widget.epsValueChanged.connect(self.action_handler.handle_eps_value_changed)
+        self.eps_section_widget.epsYearAddRequested.connect(self.action_handler.handle_eps_year_add_requested)
+        self.eps_section_widget.epsYearRemoveRequested.connect(self.action_handler.handle_eps_year_remove_requested)
+        self.eps_section_widget.epsYearDisplayChangeRequested.connect(self.action_handler.handle_eps_year_display_change_requested)
+        self.eps_section_widget.epsCompaniesForYearDisplayChangeRequested.connect(self.action_handler.handle_eps_companies_for_year_display_change_requested)
+        self.eps_section_widget.epsGrowthDataPotentiallyChanged.connect(self.action_handler.handle_eps_growth_data_changed_for_chart)
         
         self.pe_section_widget = PESectionWidget(lambda: self.EPRICE_FIXED_COMPANIES, self) # PE uses same fixed list
-        self.pe_section_widget.peValueChanged.connect(self._handle_pe_value_changed) # Connect PE specific signal
+        self.pe_section_widget.peValueChanged.connect(self.action_handler.handle_pe_value_changed) # Connect PE specific signal
         self.record_report_section_widget = RecordReportSectionWidget(lambda: self.EPRICE_FIXED_COMPANIES, self)
         self.eps_growth_chart_widget = EPSGrowthChartWidget(self) # Instantiate the chart widget
-        self.record_report_section_widget.recordReportAddRequested.connect(self._handle_record_report_add_requested)
-        self.record_report_section_widget.recordReportRemoveRequested.connect(self._handle_record_report_remove_requested)
-        self.record_report_section_widget.recordReportDetailChanged.connect(self._handle_record_report_detail_changed)
+        self.record_report_section_widget.recordReportAddRequested.connect(self.action_handler.handle_record_report_add_requested)
+        self.record_report_section_widget.recordReportRemoveRequested.connect(self.action_handler.handle_record_report_remove_requested)
+        self.record_report_section_widget.recordReportDetailChanged.connect(self.action_handler.handle_record_report_detail_changed)
+        self.record_report_section_widget.manualRefreshRequested.connect(self.action_handler.handle_record_report_manual_refresh) # Connect new signal
 
+        # Instantiate GlobalHighlightManager
+        self.highlight_manager = GlobalHighlightManager(
+            self.eprice_section_widget, self.eps_section_widget, self.pe_section_widget
+        )
         # Connect focus signals for global highlighting
-        self.eprice_section_widget.companyFocusGained.connect(self.handle_company_widget_focus_gained)
-        self.eprice_section_widget.companyFocusLost.connect(self.handle_company_widget_focus_lost)
-        self.eps_section_widget.companyLineEditFocusGained.connect(self.handle_company_widget_focus_gained)
-        self.eps_section_widget.companyLineEditFocusLost.connect(self.handle_company_widget_focus_lost)
-        self.pe_section_widget.companyFocusGained.connect(self.handle_company_widget_focus_gained)
-        self.pe_section_widget.companyFocusLost.connect(self.handle_company_widget_focus_lost)
+        self.eprice_section_widget.companyFocusGained.connect(self.highlight_manager.handle_company_widget_focus_gained)
+        self.eprice_section_widget.companyFocusLost.connect(self.highlight_manager.handle_company_widget_focus_lost)
+        self.eps_section_widget.companyLineEditFocusGained.connect(self.highlight_manager.handle_company_widget_focus_gained)
+        self.eps_section_widget.companyLineEditFocusLost.connect(self.highlight_manager.handle_company_widget_focus_lost)
+        self.pe_section_widget.companyFocusGained.connect(self.highlight_manager.handle_company_widget_focus_gained)
+        self.pe_section_widget.companyFocusLost.connect(self.highlight_manager.handle_company_widget_focus_lost)
 
         two_column_main_layout = QHBoxLayout()
         column1_widget = QWidget() 
@@ -166,7 +171,6 @@ class XmlReportEditor(QMainWindow):
         column1_layout.addWidget(self.quote_selection_widget)
         column1_layout.addWidget(self.quote_details_widget)
         column1_layout.addSpacing(50) 
-        column1_layout.addWidget(self.record_report_section_widget)
         column1_layout.addStretch() 
         
         column2_widget = QWidget() 
@@ -174,7 +178,13 @@ class XmlReportEditor(QMainWindow):
         column2_layout.addWidget(self.eprice_section_widget)
         column2_layout.addWidget(self.eps_section_widget)
         column2_layout.addWidget(self.pe_section_widget)
-        column2_layout.addWidget(self.eps_growth_chart_widget) # Add chart widget to column 2
+
+        # Create a horizontal layout for Chart and Record Reports
+        chart_and_record_layout = QHBoxLayout()
+        chart_and_record_layout.addWidget(self.eps_growth_chart_widget, 17) # Chart takes 85%
+        chart_and_record_layout.addWidget(self.record_report_section_widget, 3) # Record section takes 15%
+        
+        column2_layout.addLayout(chart_and_record_layout) # Add this horizontal layout to the second column
         column2_layout.addStretch() # Add stretch to push content upwards
         
         two_column_main_layout.addWidget(column1_widget, 3) 
@@ -290,285 +300,38 @@ class XmlReportEditor(QMainWindow):
         """Saves the current EPRICE_FIXED_COMPANIES list to the config file."""
         data_utils.save_eprice_config(self.EPRICE_FIXED_COMPANIES)
 
-    def handle_company_widget_focus_gained(self, company_name, line_edit_widget):
-        # Add the widget to the set of focused widgets for this company
-        if company_name not in self.globally_focused_company_widgets:
-            self.globally_focused_company_widgets[company_name] = set()
-        self.globally_focused_company_widgets[company_name].add(line_edit_widget)
-
-        # If this company is not already the active highlighted one, update highlighting
-        if self.active_highlighted_company != company_name:
-            if self.active_highlighted_company is not None:
-                self._update_highlight_for_company(self.active_highlighted_company, False)
-            
-            self.active_highlighted_company = company_name
-            self._update_highlight_for_company(self.active_highlighted_company, True)
-
-    def handle_company_widget_focus_lost(self, company_name, line_edit_widget):
-        # Remove the widget from the set of focused widgets for this company
-        if company_name in self.globally_focused_company_widgets:
-            if line_edit_widget in self.globally_focused_company_widgets[company_name]:
-                self.globally_focused_company_widgets[company_name].remove(line_edit_widget)
-            if not self.globally_focused_company_widgets[company_name]: # Set is now empty
-                del self.globally_focused_company_widgets[company_name]
-
-        # If this company was the active highlighted one and now has no focused widgets, unhighlight it
-        if self.active_highlighted_company == company_name and \
-           company_name not in self.globally_focused_company_widgets:
-            self._update_highlight_for_company(self.active_highlighted_company, False)
-            self.active_highlighted_company = None
-
-    def _update_highlight_for_company(self, company_name_to_update, highlight_state):
-        self.eprice_section_widget.update_company_highlight_state(company_name_to_update, highlight_state)
-        self.eps_section_widget.update_company_highlight_state(company_name_to_update, highlight_state)
-        self.pe_section_widget.update_company_highlight_state(company_name_to_update, highlight_state)
-
-    def _handle_quote_name_changed(self, old_name, new_name):
-        if not self.selected_quote_name: return # Should not happen if UI is enabled
-        
-        # Important: If the name changes, the key in all_quotes_data changes.
-        # This is a more complex command because it affects the dictionary key.
-        # For now, the ChangeQuoteDetailCommand assumes the quote_name_key is the *original* key.
-        # A more robust solution would involve a specific command for renaming a quote
-        # that handles updating self.all_quotes_data keys and self.selected_quote_name.
-        
-        # For this iteration, we'll proceed, but be aware of this complexity for quote renaming.
-        # If new_name is empty or already exists (and is not the old_name), we might want to prevent it.
-        # This validation should ideally happen before creating the command.
-        if not new_name:
-            QMessageBox.warning(self, "Input Error", "Quote name cannot be empty.")
-            self.quote_details_widget.update_field_value("name", old_name, from_command=False) # Revert UI directly
-            return
-    
-        # For a name change, the 'quote_name_key' passed to the command is the old_name,
-        # as this is the key in all_quotes_data before the change.
-        cmd = ChangeQuoteDetailCommand(self.quote_details_widget, self.all_quotes_data,
-                                       old_name, "name", old_name, new_name)
-        self.execute_command(cmd)
-        # If the name of the currently selected quote was changed, update editor's state
-        if self.selected_quote_name == old_name and old_name != new_name:
-            self.selected_quote_name = new_name
-            self.quote_selection_widget.set_quote_name_input(new_name) # Update search bar
-
-    def _handle_quote_price_changed(self, old_price, new_price):
-        if not self.selected_quote_name: return
-        cmd = ChangeQuoteDetailCommand(self.quote_details_widget, self.all_quotes_data,
-                                       self.selected_quote_name, "price", old_price, new_price)
-        self.execute_command(cmd)
-
-    def _handle_eprice_value_changed(self, company_name, old_value, new_value):
-        if not self.selected_quote_name: return
-        cmd = ChangeEPriceValueCommand(self.eprice_section_widget, self.all_quotes_data,
-                                       self.selected_quote_name, company_name, old_value, new_value)
-        self.execute_command(cmd)
-        # Note: The command's execute/unexecute will call eprice_section_widget.update_company_value
-        # which updates the widget's internal 'current_value' for that company.
-
-    def _handle_pe_value_changed(self, company_name, old_value, new_value):
-        if not self.selected_quote_name: return
-        cmd = ChangePEValueCommand(self.pe_section_widget, self.all_quotes_data,
-                                   self.selected_quote_name, company_name, old_value, new_value)
-        self.execute_command(cmd)
-        # update_company_value in PESectionWidget (inherited) will be called by the command
-
-    def _handle_eps_value_changed(self, year_name, company_name, field_name, old_value, new_value):
-        if not self.selected_quote_name: return
-        cmd = ChangeEPSValueCommand(self.eps_section_widget, self.all_quotes_data,
-                                    self.selected_quote_name, year_name, company_name,
-                                    field_name, old_value, new_value)
-        self.execute_command(cmd)
-
-    def _handle_eps_growth_data_changed_for_chart(self, year_name_changed):
+    def _find_data_model_for_record_report(self, quote_data, ui_entry_data_ref, field_name_being_changed, old_value_of_field):
         """
-        Called when EPS growth data might have changed for a specific year.
-        If this year is currently displayed in the chart, refresh the chart.
+        Helper to find the corresponding data model dictionary for a record report UI entry.
+        This is used when a detail of a record report is changed.
+        Args:
+            quote_data: The data dictionary for the current quote from self.all_quotes_data.
+            ui_entry_data_ref: The dictionary from RecordReportSectionWidget.report_entries.
+            field_name_being_changed: The name of the field that was just changed ("company", "date", or "color").
+            old_value_of_field: The value of the field *before* it was changed.
+        Returns:
+            The matching dictionary from quote_data["record"] or None if not found.
         """
-        if not self.selected_quote_name: # No quote selected, chart shouldn't be active
-            return
-        if self.eps_growth_chart_widget._selected_year_for_chart == year_name_changed:
-            # The chart's internal _all_eps_data_for_current_quote should be up-to-date
-            # as it references the list from self.all_quotes_data.
-            self.eps_growth_chart_widget.update_chart(year_name_changed)
-    def _handle_eps_year_add_requested(self, year_name):
-        if not self.selected_quote_name: return
-        # initial_companies_data is None, so _add_eps_year_fields will populate with fixed companies
-        cmd = AddEPSYearCommand(self.eps_section_widget, self.all_quotes_data,
-                                self.selected_quote_name, year_name, initial_companies_data=None)
-        self.execute_command(cmd)
-
-    def _handle_eps_year_remove_requested(self, year_name_to_remove):
-        if not self.selected_quote_name: return
-        
-        quote_data = self.all_quotes_data.get(self.selected_quote_name)
-        if not quote_data or "eps" not in quote_data: return
-
-        removed_year_data_model = next((year for year in quote_data["eps"] if year.get("name") == year_name_to_remove), None)
-        if not removed_year_data_model:
-            QMessageBox.warning(self, "Error", f"Could not find EPS year '{year_name_to_remove}' in data model to remove.")
-            return
-
-        cmd = RemoveEPSYearCommand(self.eps_section_widget, self.all_quotes_data,
-                                   self.selected_quote_name, year_name_to_remove, removed_year_data_model)
-        self.execute_command(cmd)
-
-    def _handle_record_report_add_requested(self):
-        if not self.selected_quote_name: return
-        
-        # Default data for a new report entry
-        new_report_data = {
-            "company": self.EPRICE_FIXED_COMPANIES[0] if self.EPRICE_FIXED_COMPANIES else "",
-            "date": data_utils.get_default_working_date().toString("MM/dd/yyyy"),
-            "color": "default"
-        }
-        cmd = AddRecordReportCommand(self.record_report_section_widget, self.all_quotes_data,
-                                     self.selected_quote_name, new_report_data, insert_at_index=0)
-        self.execute_command(cmd)
-        # The AddRecordReportCommand's execute method calls add_report_entry on the widget,
-        # which updates the UI. The command also updates the data model.
-
-    def _handle_eps_year_display_change_requested(self, old_selected_years, new_selected_years):
-        if not self.selected_quote_name: return # Should not be possible if widget is active
-        cmd = ChangeEPSYearDisplayCommand(self.eps_section_widget, old_selected_years, new_selected_years)
-        self.execute_command(cmd)
-
-    def _handle_eps_companies_for_year_display_change_requested(self, year_name, old_selected_companies, new_selected_companies):
-        if not self.selected_quote_name: return
-        cmd = ChangeEPSCompaniesForYearDisplayCommand(self.eps_section_widget, year_name, old_selected_companies, new_selected_companies)
-        self.execute_command(cmd)
-        # The AddRecordReportCommand's execute method calls add_report_entry on the widget,
-        # which updates the UI. The command also updates the data model.
-
-    def _handle_record_report_remove_requested(self, ui_entry_data_to_remove):
-        if not self.selected_quote_name or self.selected_quote_name not in self.all_quotes_data:
-            return
-
-        quote_data = self.all_quotes_data[self.selected_quote_name]
-        if "record" not in quote_data:
-            return
-
-        # Find the corresponding data model entry and its index
-        report_data_model_to_remove = None
-        original_data_model_index = -1
-
-        # Match based on the "current_" values stored in the ui_entry_data_to_remove
-        match_company = ui_entry_data_to_remove.get("current_company")
-        match_date = ui_entry_data_to_remove.get("current_date")
-        match_color = ui_entry_data_to_remove.get("current_color")
-
         for idx, data_model_entry in enumerate(quote_data["record"]):
-            if (data_model_entry.get("company") == match_company and
-                data_model_entry.get("date") == match_date and
-                data_model_entry.get("color", "default") == match_color): # Ensure default color match
-                report_data_model_to_remove = data_model_entry
-                original_data_model_index = idx
-                break
-        
-        if report_data_model_to_remove is None:
-            QMessageBox.warning(self, "Error", "Could not find the report entry in the data model to remove.")
-            return
-
-        cmd = RemoveRecordReportCommand(self.record_report_section_widget, self.all_quotes_data,
-                                        self.selected_quote_name, report_data_model_to_remove,
-                                        ui_entry_data_to_remove, original_data_model_index)
-        self.execute_command(cmd)
-
-    def _handle_record_report_detail_changed(self, ui_entry_data_ref, field_name, old_value, new_value):
-        if not self.selected_quote_name or self.selected_quote_name not in self.all_quotes_data:
-            return
-        
-        # The ui_entry_data_ref is the dictionary from RecordReportSectionWidget.report_entries
-        # We need to find the corresponding dictionary in self.all_quotes_data[...]["record"]
-        # For simplicity, we assume ui_entry_data_ref's "current_*" fields are up-to-date *before* this change.
-        # The command will operate on these direct references.
-        # Find the actual data model dict. This is tricky if multiple identical entries exist.
-        # A more robust way would be for ui_entry_data_ref to hold a unique ID or direct model ref.
-        # For now, assume the command gets the correct model reference.
-        # Let's assume the command is given the correct model reference by the caller or finds it.
-        # The ChangeRecordReportDetailCommand will need the actual dict from all_quotes_data["record"].
-        # We'll pass the ui_entry_data_ref and let the command find/use the model_ref.
-        # This requires the command to be smarter or the ui_entry_data_ref to contain the model_ref.
-
-        # To make this work, we need to find the data_model_ref here.
-        quote_data = self.all_quotes_data[self.selected_quote_name]
-        data_model_ref = None
-        for entry in quote_data.get("record", []):
             # Match based on old values to find the correct model entry
-            current_model_company = entry.get("company")
-            current_model_date = entry.get("date")
-            current_model_color = entry.get("color", "default")
+            # The ui_entry_data_ref.get("current_...") holds the state *before* the current change was applied to it by the widget.
+            # So, if field_name_being_changed is "company", its old value is old_value_of_field.
+            # The other fields in ui_entry_data_ref.get("current_...") are their original values.
 
-            original_ui_company = ui_entry_data_ref.get("current_company") if field_name != "company" else old_value
-            original_ui_date = ui_entry_data_ref.get("current_date") if field_name != "date" else old_value
-            original_ui_color = ui_entry_data_ref.get("current_color") if field_name != "color" else old_value
+            original_ui_company = old_value_of_field if field_name_being_changed == "company" else ui_entry_data_ref.get("current_company")
+            original_ui_date = old_value_of_field if field_name_being_changed == "date" else ui_entry_data_ref.get("current_date")
+            original_ui_color = old_value_of_field if field_name_being_changed == "color" else ui_entry_data_ref.get("current_color", "default")
             
-            if (current_model_company == original_ui_company and
-                current_model_date == original_ui_date and
-                current_model_color == original_ui_color):
-                data_model_ref = entry
-                break
-        
-        if data_model_ref is None:
-            QMessageBox.warning(self, "Error", f"Could not find matching record in data model for update: {old_value} -> {new_value}")
-            # Revert UI change if model not found? Or let widget handle it.
-            self.record_report_section_widget.update_report_entry_detail(ui_entry_data_ref, field_name, old_value)
-            return
-
-        cmd = ChangeRecordReportDetailCommand(self.record_report_section_widget, self.all_quotes_data,
-                                            self.selected_quote_name, data_model_ref, ui_entry_data_ref,
-                                            field_name, old_value, new_value)
-        self.execute_command(cmd)
-
-    def _handle_root_date_changed_by_calendar(self, new_qdate):
-        # This is called immediately on calendar selection.
-        # We can defer command creation to editingFinished or handle it here carefully.
-        # For simplicity, let's use editingFinished for manual edits,
-        # and this for direct calendar changes.
-        new_date_str = new_qdate.toString("MM/dd/yyyy")
-        if new_date_str != self._current_root_date_str:
-            # Create and execute command directly
-            # Ensure all_quotes_data has a 'date' key if it's the first time
-            if "date" not in self.all_quotes_data:
-                 self.all_quotes_data["date"] = self._current_root_date_str # Initialize if needed
-
-            cmd = ChangeRootDateCommand(self.root_date_edit, self.all_quotes_data,
-                                        self._current_root_date_str, new_date_str)
-            self.execute_command(cmd)
-            self._current_root_date_str = new_date_str
-
-    def _handle_root_date_changed(self):
-        """Called when root_date_edit editing is finished (e.g., focus lost or enter pressed)."""
-        new_date_str = self.root_date_edit.date().toString("MM/dd/yyyy")
-        if new_date_str != self._current_root_date_str:
-            # Ensure all_quotes_data has a 'date' key if it's the first time
-            if "date" not in self.all_quotes_data:
-                 self.all_quotes_data["date"] = self._current_root_date_str # Initialize if needed
-
-            cmd = ChangeRootDateCommand(self.root_date_edit, self.all_quotes_data,
-                                        self._current_root_date_str, new_date_str)
-            self.execute_command(cmd)
-            self._current_root_date_str = new_date_str
+            if (data_model_entry.get("company") == original_ui_company and
+                data_model_entry.get("date") == original_ui_date and
+                data_model_entry.get("color", "default") == original_ui_color):
+                return data_model_entry
+        return None
 
     def _update_undo_redo_actions_state(self):
         self.undo_action.setEnabled(bool(self.undo_stack))
         self.redo_action.setEnabled(bool(self.redo_stack))
 
-    # Methods like add_record_report_fields, _handle_report_color_change, 
-    # _apply_report_color_style, _apply_report_display_limit are now part of RecordReportSectionWidget
-
-    # _update_record_report_company_dropdowns is now part of RecordReportSectionWidget.update_company_dropdowns
-
-    # _remove_dynamic_list_entry is now handled within each section widget if needed, or can be a static utility
-
-    def _clear_layout_widgets(self, layout):
-        if layout is not None:
-            while layout.count():
-                item = layout.takeAt(0)
-                widget = item.widget()
-                if widget is not None: widget.deleteLater() 
-                else:
-                    sub_layout = item.layout()
-                    if sub_layout is not None: self._clear_layout_widgets(sub_layout)
-    
     def clear_all_fields(self):
         initial_root_date = data_utils.get_default_working_date()
         if initial_root_date.isValid(): self.root_date_edit.setDate(initial_root_date)
@@ -596,6 +359,8 @@ class XmlReportEditor(QMainWindow):
         self.pe_section_widget.refresh_structure() # Rebuild with fixed companies, clear values
         self.eps_growth_chart_widget.clear_data()
         self.record_report_section_widget.clear_data()
+        if hasattr(self, 'highlight_manager'): # Clear any active highlight
+            self.highlight_manager.clear_active_highlight()
 
     def _display_quote(self, quote_name, is_new_quote=False):
         # _save_displayed_quote_data() should ideally not be needed here if all changes
@@ -604,6 +369,8 @@ class XmlReportEditor(QMainWindow):
         # For now, we keep it to ensure data consistency before switching.
         self._save_displayed_quote_data()
         self._clear_displayed_quote_ui() 
+        if hasattr(self, 'highlight_manager'): # Clear any active highlight before displaying new quote
+            self.highlight_manager.clear_active_highlight()
         
         if quote_name not in self.all_quotes_data:
             # This case should be handled by the calling function (handle_select_quote_button)
@@ -636,7 +403,11 @@ class XmlReportEditor(QMainWindow):
         current_quote_data_entry["e_price"] = self.eprice_section_widget.get_data()
         current_quote_data_entry["eps"] = self.eps_section_widget.get_data()
         current_quote_data_entry["pe"] = self.pe_section_widget.get_data()
-        current_quote_data_entry["record"] = self.record_report_section_widget.get_data()
+        # For "record" data, current_quote_data_entry["record"] (which is a reference to
+        # self.all_quotes_data[self.selected_quote_name]["record"]) should already contain
+        # the complete list of records managed by Add/RemoveRecordReportCommands.
+        # The RecordReportSectionWidget.get_data() only returns the displayed subset.
+        # So, we don't overwrite current_quote_data_entry["record"] here.
 
     def handle_select_quote_button(self, quote_name_to_select): # Parameter from signal
         if not quote_name_to_select:
@@ -885,12 +656,9 @@ class XmlReportEditor(QMainWindow):
         elif isinstance(command, AddRecordReportCommand):
             # Command's unexecute handles data model and UI removal
             pass
-        elif isinstance(command, RemoveRecordReportCommand):
-            # Command's unexecute handles data model and UI re-addition.
-            # It calls add_report_entry, so UI is rebuilt.
-            # We might need to ensure the record list is displayed correctly if it was the selected quote.
-            if self.selected_quote_name == command.quote_name_key:
-                self._display_quote(self.selected_quote_name, is_new_quote=False) # Refresh display
+        elif isinstance(command, RemoveRecordReportCommand): # Undo a remove = re-add
+            # Command's unexecute calls load_data on the record_widget, so UI is updated.
+            pass
         elif isinstance(command, ChangeRecordReportDetailCommand):
             # Command's unexecute calls update_report_entry_detail on the widget
             pass
@@ -959,9 +727,8 @@ class XmlReportEditor(QMainWindow):
             # Command's execute handles data model and UI
             pass
         elif isinstance(command, AddRecordReportCommand):
-            # Command's execute handles data model and UI addition.
-            if self.selected_quote_name == command.quote_name_key:
-                 self._display_quote(self.selected_quote_name, is_new_quote=False) # Refresh display
+            # Command's execute calls load_data on the record_widget, so UI is updated.
+            pass
         elif isinstance(command, RemoveRecordReportCommand):
             # Command's execute handles data model and UI removal.
             pass # UI is handled by command
