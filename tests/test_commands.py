@@ -1,5 +1,6 @@
 # t:\Work\xml_input_ui\tests\test_commands.py
 import unittest
+import copy # Import the copy module for deepcopy
 from unittest.mock import MagicMock, patch, call
 from commands import (
     Command, ChangeRootDateCommand, ChangeQuoteDetailCommand, AddQuoteCommand,
@@ -73,22 +74,57 @@ class TestCommands(unittest.TestCase):
         old_name = "AAPL"
         new_name = "AAPL_NEW"
         field = "name"
+
+        # Store initial state of the original data to verify it's not changed
+        # as the command operates on a copy.
+        initial_original_data = {
+            k: v.copy() if isinstance(v, dict) else v 
+            for k, v in self.mock_all_quotes_data.items()
+        }
+        original_price = self.mock_all_quotes_data[old_name]["price"]
+
         # For name change, quote_name_key is the old_name
-        cmd = ChangeQuoteDetailCommand(self.mock_quote_details_widget, self.mock_all_quotes_data.copy(), old_name, field, old_name, new_name)
+        # Command is given a copy of the data.
+        # quote_name_key = old_name (key to find the item)
+        # old_value_for_field = old_name (the actual old name string)
+        # new_value_for_field = new_name (the actual new name string)
+        cmd = ChangeQuoteDetailCommand(
+            self.mock_quote_details_widget, 
+            copy.deepcopy(self.mock_all_quotes_data), # Command gets a deep copy
+            old_name,  # quote_name_key
+            field, 
+            old_name,  # old_value (of the 'name' field)
+            new_name   # new_value (for the 'name' field)
+        )
 
+        # --- Test execute ---
         cmd.execute()
-        self.assertNotIn("OLD_NAME", self.mock_all_quotes_data) # Should be gone if copy was used
-        self.assertIn("AAPL_NEW", self.mock_all_quotes_data)
-        self.assertEqual(cmd.all_quotes_data_ref["AAPL_NEW"]["name"], new_name) # Check the data reference used by the command
-        self.mock_quote_details_widget.update_field_value.assert_called_once_with(field, new_name, from_command=True)
 
+        # Assertions on the command's internal data (cmd.all_quotes_data_ref)
+        self.assertIn(new_name, cmd.all_quotes_data_ref, "New key should be in command's data after execute")
+        self.assertNotIn(old_name, cmd.all_quotes_data_ref, "Old key should NOT be in command's data after execute")
+        self.assertEqual(cmd.all_quotes_data_ref[new_name]["name"], new_name, "Name field under new key should be updated")
+        self.assertEqual(cmd.all_quotes_data_ref[new_name]["price"], original_price, "Other data (price) should be preserved under new key")
+        
+        # Assert that the original self.mock_all_quotes_data is unchanged
+        self.assertEqual(self.mock_all_quotes_data, initial_original_data, "Original data should not be modified by execute")
+
+        # UI update check
+        self.mock_quote_details_widget.update_field_value.assert_called_once_with(field, new_name, from_command=True)
         self.mock_quote_details_widget.update_field_value.reset_mock()
 
+        # --- Test unexecute ---
         cmd.unexecute()
-        self.assertIn("AAPL", cmd.all_quotes_data_ref) # Check the data reference used by the command
-        self.assertNotIn("AAPL_NEW", cmd.all_quotes_data_ref) # Should be gone
-        self.assertEqual(self.mock_all_quotes_data["AAPL"]["name"], old_name) # Corrected assertion
-        self.mock_quote_details_widget.update_field_value.assert_called_with(field, old_name, from_command=True)
+        self.assertIn(old_name, cmd.all_quotes_data_ref, "Old key should be restored in command's data after unexecute")
+        self.assertNotIn(new_name, cmd.all_quotes_data_ref, "New key should NOT be in command's data after unexecute")
+        self.assertEqual(cmd.all_quotes_data_ref[old_name]["name"], old_name, "Name field under old key should be restored")
+        self.assertEqual(cmd.all_quotes_data_ref[old_name]["price"], original_price, "Other data (price) should be preserved under old key after unexecute")
+
+        # Assert that the original self.mock_all_quotes_data is still unchanged
+        self.assertEqual(self.mock_all_quotes_data, initial_original_data, "Original data should not be modified by unexecute")
+
+        # UI update check
+        self.mock_quote_details_widget.update_field_value.assert_called_once_with(field, old_name, from_command=True)
 
     def test_change_quote_detail_command_price(self):
         quote_name_key = "AAPL"

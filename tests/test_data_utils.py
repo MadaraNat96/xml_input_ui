@@ -27,26 +27,30 @@ class TestDataUtils(unittest.TestCase):
         mock_current_date.return_value = QDate(2023, 10, 30) # Monday
         self.assertEqual(data_utils.get_default_working_date(), QDate(2023, 10, 30))
 
+    # This is where the updated code goes:
+    # Use mock_open with read_data for simpler file content simulation
+    mock_file_content = "CompanyA\nCompanyB\nCompanyA\n"
+    mock_file_open_instance = mock_open(read_data=mock_file_content)
+    
+    # Patches are applied from bottom up; arguments are injected in reverse order of decorators
+    @patch('builtins.open', new_callable=lambda: mock_open(read_data=TestDataUtils.mock_file_content))
     @patch('data_utils.os.path.exists')
-    @patch('builtins.open', new_callable=mock_open)
-    @patch('data_utils.QMessageBox.warning') # Mock QMessageBox
-    @patch('data_utils.save_eprice_config') # Mock save to check if it's called
-    def test_load_eprice_config_success(self, mock_save_config, mock_qmessagebox, mock_file_open, mock_exists):
+    @patch('data_utils.QMessageBox.warning')
+    @patch('data_utils.save_eprice_config')
+    def test_load_eprice_config_success(self, mock_save_config, mock_qmessagebox, mock_exists, mock_open_instance):
         mock_exists.return_value = True
         default_list = ["DEFAULT1", "DEFAULT2"]
-        
-        # Configure the mock file handle (mock_file_open.return_value)
-        mock_file_handle = mock_file_open.return_value
-        mock_file_handle.__iter__.return_value = iter(["CompanyA\n", "CompanyB\n", "CompanyA\n"])
-        mock_file_handle.readlines.return_value = ["CompanyA\n", "CompanyB\n", "CompanyA\n"] # Keep for completeness
 
         companies = data_utils.load_eprice_config(default_list)
 
+        # Assertions
         self.assertEqual(companies, ["COMPANYA", "COMPANYB"]) # Should be unique and uppercase
         mock_exists.assert_called_once_with(data_utils.EPRICE_CONFIG_FILE)
-        mock_file_open.assert_called_once_with(data_utils.EPRICE_CONFIG_FILE, 'r', encoding='utf-8')
+        # The mock_open_instance is the one injected by the decorator
+        mock_open_instance.assert_called_once_with(data_utils.EPRICE_CONFIG_FILE, 'r', encoding='utf-8')
         mock_qmessagebox.assert_not_called()
         mock_save_config.assert_not_called()
+
 
     @patch('data_utils.os.path.exists') # mock_exists
     @patch('builtins.open', new_callable=mock_open) # mock_file_open
@@ -72,7 +76,12 @@ class TestDataUtils(unittest.TestCase):
         # Test file is empty
         default_list = ["DEFAULT1", "DEFAULT2"] # Define default_list here
         mock_exists.return_value = True
-        mock_file_open.return_value.readlines.return_value = [] # Simulate empty file
+        # For an empty file, readlines() or iteration should yield nothing.
+        # If using mock_open(read_data=""), it handles this.
+        # If using new_callable=mock_open, configure the return_value of readlines or __iter__
+        mock_file_open.return_value.readlines.return_value = [] 
+        # Or for direct iteration: mock_file_open.return_value.__iter__.return_value = iter([])
+        
         companies = data_utils.load_eprice_config(default_list)
 
         self.assertEqual(companies, default_list)
@@ -270,7 +279,7 @@ class TestDataUtils(unittest.TestCase):
     @patch('xml.dom.minidom.parseString')
     @patch('builtins.open', new_callable=mock_open)
     @patch('data_utils.QMessageBox.critical')
-    def test_save_xml_to_file_success(self, mock_critical, mock_open, mock_dom_parse):
+    def test_save_xml_to_file_success(self, mock_critical, mock_open_method, mock_dom_parse): # Renamed mock_open to mock_open_method
         mock_dom = MagicMock()
         mock_dom.toprettyxml.return_value = "<pretty/>"
         mock_dom_parse.return_value = mock_dom
@@ -279,24 +288,27 @@ class TestDataUtils(unittest.TestCase):
         success = data_utils.save_xml_to_file("dummy_path.xml", mock_root_element)
 
         self.assertTrue(success)
-        mock_open.assert_called_once_with("dummy_path.xml", "w", encoding="utf-8")
-        mock_open().write.assert_called_once_with("<pretty/>")
+        mock_open_method.assert_called_once_with("dummy_path.xml", "w", encoding="utf-8")
+        mock_open_method().write.assert_called_once_with("<pretty/>")
         mock_critical.assert_not_called()
 
     @patch('xml.dom.minidom.parseString')
     @patch('builtins.open', new_callable=mock_open)
     @patch('data_utils.QMessageBox.critical')
-    def test_save_xml_to_file_error(self, mock_critical, mock_open, mock_dom_parse):
+    def test_save_xml_to_file_error(self, mock_critical, mock_open_method, mock_dom_parse): # Renamed mock_open to mock_open_method
         mock_dom = MagicMock()
         mock_dom.toprettyxml.return_value = "<pretty/>"
         mock_dom_parse.return_value = mock_dom
 
-        mock_open.side_effect = IOError("Disk full")
+        mock_open_method.side_effect = IOError("Disk full")
 
         mock_root_element = ET.Element("root")
 
         success = data_utils.save_xml_to_file("dummy_path.xml", mock_root_element)
 
         self.assertFalse(success)
-        mock_open.assert_called_once_with("dummy_path.xml", "w", encoding="utf-8")
+        mock_open_method.assert_called_once_with("dummy_path.xml", "w", encoding="utf-8")
         mock_critical.assert_called_once()
+
+if __name__ == '__main__':
+    unittest.main()
