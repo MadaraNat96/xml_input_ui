@@ -22,6 +22,7 @@ from commands import (Command, ChangeRootDateCommand, ChangeQuoteDetailCommand,
                       ChangeEPSYearDisplayCommand, ChangeEPSCompaniesForYearDisplayCommand,
                       AddRecordReportCommand, RemoveRecordReportCommand, ChangeRecordReportDetailCommand,
                       ChangeEPriceFixedCompaniesCommand)
+from command_manager import CommandManager # Import the new CommandManager
 from editor_action_handler import EditorActionHandler # Import the new handler class
 from ui_managers import GlobalHighlightManager # Import the new manager
 from file_manager import FileManager # Import the new FileManager
@@ -35,9 +36,6 @@ class XmlReportEditor(QMainWindow):
         # self.current_file_path = None # Now managed by FileManager
         self.setGeometry(100, 100, 800, 700)
 
-        self.undo_stack = []
-        self.redo_stack = []
-
         self.all_quotes_data = {}
         self.selected_quote_name = None
         # self.displayed_quote_ui = None # This will be replaced by individual section widgets
@@ -46,6 +44,7 @@ class XmlReportEditor(QMainWindow):
         self.EPRICE_FIXED_COMPANIES = ["VCSC", "SSI", "MBS", "AGR", "BSC", "FPT", "CTG"] 
 
         self.file_manager = FileManager(self) # Instantiate FileManager
+        self.command_manager = CommandManager(self) # Instantiate CommandManager
         self.action_handler = EditorActionHandler(self) # Instantiate ActionHandler
         
         self.init_ui() 
@@ -257,12 +256,8 @@ class XmlReportEditor(QMainWindow):
         self.history_log_text_edit.append(message)
 
     def execute_command(self, command: Command):
-        command.execute()
-        self.undo_stack.append(command)
-        self.redo_stack.clear()
-        self._update_undo_redo_actions_state()
-        self._log_history(f"Executed: {command}")
-        self._set_dirty_flag(True) # Mark as unsaved changes
+        # Delegate to CommandManager. It will call back for logging, dirty flag, and action state update.
+        self.command_manager.execute_command(command)
 
     def _set_dirty_flag(self, dirty):
         title = "XML Report Editor"
@@ -329,8 +324,8 @@ class XmlReportEditor(QMainWindow):
         return None
 
     def _update_undo_redo_actions_state(self):
-        self.undo_action.setEnabled(bool(self.undo_stack))
-        self.redo_action.setEnabled(bool(self.redo_stack))
+        self.undo_action.setEnabled(self.command_manager.can_undo())
+        self.redo_action.setEnabled(self.command_manager.can_redo())
 
     def clear_all_fields(self):
         initial_root_date = data_utils.get_default_working_date()
@@ -344,10 +339,9 @@ class XmlReportEditor(QMainWindow):
         
         self.quote_selection_widget.clear_input()
         self._set_displayed_quote_ui_enabled(False)
-        self.current_file_path = None
-        self.undo_stack.clear() # Clear undo stack on clearing all fields
-        self.redo_stack.clear()
-        self._update_undo_redo_actions_state()
+        # self.current_file_path = None # This is managed by FileManager, but reset it here too for consistency
+        if self.file_manager: self.file_manager.current_file_path = None
+        self.command_manager.clear_stacks()
         self._set_dirty_flag(False)
 
     def _clear_displayed_quote_ui(self):
@@ -490,7 +484,7 @@ class XmlReportEditor(QMainWindow):
                 self.all_quotes_data["date"] = self._current_root_date_str
 
     def closeEvent(self, event):
-        if self.undo_stack: # Check if there are unsaved changes
+        if self.command_manager.can_undo(): # Check if there are unsaved changes by checking the undo stack
             reply = QMessageBox.question(self, "Unsaved Changes",
                                          "There are unsaved changes. Do you want to save before exiting?",
                                          QMessageBox.StandardButton.Save | 
@@ -508,16 +502,12 @@ class XmlReportEditor(QMainWindow):
         super().closeEvent(event)
 
 
-    def open_xml_file(self):
-        # Use FileManager to open and parse the file
+    def open_xml_file(self): # sourcery skip: extract-method
         file_path, root_date_qdate, all_quotes_data_dict = self.file_manager.open_file()
-        
-        if file_path: # FileManager.open_file returns file_path if successful
+        if file_path:
             self._load_data_into_ui(root_date_qdate, all_quotes_data_dict)
             self._set_dirty_flag(False) # Freshly loaded file is not dirty
-            self.undo_stack.clear()
-            self.redo_stack.clear()
-            self._update_undo_redo_actions_state()
+            self.command_manager.clear_stacks()
 
     def _load_data_into_ui(self, root_date_qdate, all_quotes_data_dict):
         """Helper to load parsed data into the UI elements."""
@@ -581,8 +571,7 @@ class XmlReportEditor(QMainWindow):
             bool: True if save was successful, False otherwise.
         """
         if save_function_callable(self.collect_data_for_xml):
-            self.undo_stack.clear() # Consider saved state as clean for undo
-            self._update_undo_redo_actions_state()
+            self.command_manager.clear_stacks() # Consider saved state as clean for undo
             self._set_dirty_flag(False)
             return True
         return False # Return False if save_function_callable failed
@@ -594,24 +583,16 @@ class XmlReportEditor(QMainWindow):
         return self._perform_save_operation(self.file_manager.save_file_as)
 
     def undo(self):
-        if not self.undo_stack:
+        command = self.command_manager.undo()
+        if not command:
             return
-        command = self.undo_stack.pop()
 
-        # Store the name of the quote that might be affected by unexecute
-        # For AddQuoteCommand, unexecute removes it.
-        # For RemoveQuoteCommand, unexecute re-adds it.
-        affected_quote_name_before_unexecute = None
-        if isinstance(command, AddQuoteCommand):
-            affected_quote_name_before_unexecute = command.quote_name
-        elif isinstance(command, RemoveQuoteCommand):
-            affected_quote_name_before_unexecute = command.quote_name_to_remove
+        # CommandManager has already called command.unexecute() and updated stacks/dirty flag/log.
+        # Now, handle editor-specific UI updates based on the command type.
 
-        command.unexecute()
         # Update the internal state only if it's a root date command
         if isinstance(command, ChangeRootDateCommand):
             self._current_root_date_str = command.old_date_qdate.toString("MM/dd/yyyy")
-        self.redo_stack.append(command)
         
         # After command.unexecute(), the data model is reverted.
         # For quote name changes, the command itself handles the key change in all_quotes_data.
@@ -672,23 +653,19 @@ class XmlReportEditor(QMainWindow):
             # Command's unexecute handles reverting EPRICE_FIXED_COMPANIES,
             # calling _load_eprice_config_and_update_ui(), and saving config.
             pass
-        self._update_undo_redo_actions_state()
-        self._log_history(f"Undone: {command}")
-        self._set_dirty_flag(True) # Undoing makes it dirty again relative to last save
+        # _update_undo_redo_actions_state, _log_history, _set_dirty_flag already called by command_manager
 
     def redo(self): # sourcery skip: extract-method
-        if not self.redo_stack:
+        command = self.command_manager.redo()
+        if not command:
             return
-        command = self.redo_stack.pop()
-        command.execute()
+        
+        # CommandManager has already called command.execute() and updated stacks/dirty flag/log.
+        # Now, handle editor-specific UI updates based on the command type.
+
         # Update the internal state only if it's a root date command
         if isinstance(command, ChangeRootDateCommand):
             self._current_root_date_str = command.new_date_qdate.toString("MM/dd/yyyy")
-        self.undo_stack.append(command)
-
-        # After command.execute(), the data model is updated.
-        # For quote name changes, the command itself handles the key change in all_quotes_data.
-        # We now need to update the editor's selected_quote_name if it was affected.
         if isinstance(command, ChangeQuoteDetailCommand):
             # command.execute() already called quote_details_widget.update_field_value
             if command.field_name == "name":
@@ -745,11 +722,7 @@ class XmlReportEditor(QMainWindow):
             # Command's execute handles updating EPRICE_FIXED_COMPANIES,
             # calling _load_eprice_config_and_update_ui(), and saving config.
             pass
-
-
-        self._update_undo_redo_actions_state()
-        self._log_history(f"Redone: {command}")
-        self._set_dirty_flag(True)
+        # _update_undo_redo_actions_state, _log_history, _set_dirty_flag already called by command_manager
 
 def main():
     app = QApplication(sys.argv)

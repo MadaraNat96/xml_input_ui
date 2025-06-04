@@ -67,11 +67,11 @@ def parse_xml_data(file_path):
         root = tree.getroot()
     except FileNotFoundError:
         QMessageBox.critical(None, "Error", f"File not found: {file_path}")
-        return None, None
+        return None, None, None # Return 3 values for consistency
     except ET.ParseError as e:
         QMessageBox.critical(None, "Error", f"Error parsing XML file: {file_path}\n{e}")
-        return None, None
-
+        return None, None, None # Return 3 values for consistency
+    
     root_date_qdate = get_default_working_date()
     date_el = root.find("date")
     if date_el is not None and date_el.text:
@@ -135,7 +135,7 @@ def parse_xml_data(file_path):
                     })
             all_quotes_data_dict[quote_name] = current_quote_data_entry
             
-    return root_date_qdate, all_quotes_data_dict
+    return file_path, root_date_qdate, all_quotes_data_dict
 
 def build_xml_tree(data_for_xml):
     """Generates an XML ElementTree from the collected data."""

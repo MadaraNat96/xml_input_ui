@@ -543,18 +543,20 @@ class ChangeEPriceFixedCompaniesCommand(Command):
         self.new_fixed_companies = list(new_fixed_companies) # Store copies
 
     def execute(self):
-        # Update the editor's list
-        self.editor_ref.EPRICE_FIXED_COMPANIES = list(self.new_fixed_companies)
-        # Trigger UI refresh and save config through editor's methods
-        self.editor_ref._load_eprice_config_and_update_ui() # This refreshes all relevant sections
-        # data_utils.save_eprice_config is called within _load_eprice_config_and_update_ui
-        # if the list actually changed and needs saving, or we can call it explicitly.
-        # For clarity and to ensure it's always saved with the command:
-        self.editor_ref.save_current_eprice_config() # New method in editor
+        if self.editor_ref:
+            # Update the editor's list
+            self.editor_ref.EPRICE_FIXED_COMPANIES = list(self.new_fixed_companies)
+            # Trigger UI refresh and save config through editor's methods
+            self.editor_ref._load_eprice_config_and_update_ui() # This refreshes all relevant sections
+            # data_utils.save_eprice_config is called within _load_eprice_config_and_update_ui
+            # if the list actually changed and needs saving, or we can call it explicitly.
+            # For clarity and to ensure it's always saved with the command:
+            self.editor_ref.save_current_eprice_config() # New method in editor
 
     def unexecute(self):
-        # Revert the editor's list
-        self.editor_ref.EPRICE_FIXED_COMPANIES = list(self.old_fixed_companies)
-        # Trigger UI refresh and save config
-        self.editor_ref._load_eprice_config_and_update_ui()
-        self.editor_ref.save_current_eprice_config() # New method in editor
+        if self.editor_ref:
+            # Revert the editor's list
+            self.editor_ref.EPRICE_FIXED_COMPANIES = list(self.old_fixed_companies)
+            # Trigger UI refresh and save config
+            self.editor_ref._load_eprice_config_and_update_ui()
+            self.editor_ref.save_current_eprice_config() # New method in editor

@@ -1,3 +1,5 @@
 /.vscode
 /__pycache__
 ui_components/__pycache__
+tests/__pycache__
+.coverage
