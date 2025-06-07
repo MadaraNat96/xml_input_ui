@@ -12,6 +12,7 @@ import data_utils
 
 class SectorsSectionWidget(QWidget):
     sectorValueChanged = pyqtSignal(str, str, str) # sector name, field (type/name), new value
+    sectorRemoved = pyqtSignal(str)  # Signal emitted when a sector is removed (passes sector name)
 
     def __init__(self, sectors_provider_func, parent=None):
         super().__init__(parent)
@@ -190,6 +191,11 @@ class SectorsSectionWidget(QWidget):
                                      QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
             self._remove_sector_ui(sector_name)
+            # Inform the editor that a sector has been removed
+            # It's crucial to emit the signal *after* updating the UI,
+            # So that any listeners can rely on the UI state reflecting the change.
+            if sector_name:
+                self.sectorRemoved.emit(sector_name)
 
     def _remove_sector_ui(self, sector_name):
         """Removes the sector entry from the UI."""

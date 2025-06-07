@@ -314,14 +314,6 @@
             </record>
             <sectors>
                 <sector>
-                    <name>CHỨNG KHOÁN</name>
-                    <type>sub</type>
-                </sector>
-                <sector>
-                    <name>NGÂN HÀNG</name>
-                    <type>main</type>
-                </sector>
-                <sector>
                     <name>NGÂN HÀNG</name>
                     <type>main</type>
                 </sector>

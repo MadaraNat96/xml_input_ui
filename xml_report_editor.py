@@ -152,6 +152,7 @@ class XmlReportEditor(QMainWindow):
         self.sectors_section_widget = SectorsSectionWidget(lambda: self.SECTOR_LIST, self) # Now SECTOR_LIST is initialized
         self.sectors_section_widget.sectorValueChanged.connect(self.action_handler.handle_sector_value_changed)
         self.eps_growth_chart_widget = EPSGrowthChartWidget(self) # Instantiate the chart widget
+        self.sectors_section_widget.sectorRemoved.connect(self.action_handler.handle_remove_sector)
         self.record_report_section_widget.recordReportAddRequested.connect(self.action_handler.handle_record_report_add_requested)
         self.record_report_section_widget.recordReportRemoveRequested.connect(self.action_handler.handle_record_report_remove_requested)
         self.record_report_section_widget.recordReportDetailChanged.connect(self.action_handler.handle_record_report_detail_changed)
