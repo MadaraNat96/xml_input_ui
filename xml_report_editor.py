@@ -408,9 +408,9 @@ class XmlReportEditor(QMainWindow):
         self.eps_growth_chart_widget.load_data(quote_data.get("eps", [])) # Load data into chart
         self.record_report_section_widget.load_data(quote_data.get("record", []))
         
-        self.quote_selection_widget.set_quote_name_input(quote_name)
-        # Load sectors from the database
-        self.sectors_section_widget.load_sectors_from_db(quote_name)
+        self.quote_selection_widget.set_quote_name_input(quote_name)        
+        # Load sectors from the quote data in XML.
+        self.sectors_section_widget.load_sectors_from_db(quote_name, self.all_quotes_data)
         self._set_displayed_quote_ui_enabled(True)
 
     def _save_displayed_quote_data(self):

@@ -142,6 +142,14 @@ def parse_xml_data(file_path):
                         "name": sector_el.findtext("name", default=""),
                         "type": sector_el.findtext("type", default="main")  # Default to 'main'
                     })
+            # Update all_quotes_data_dict with the current quote's data
+            # If a quote name appears multiple times, the last one will take precedence
+            if quote_name not in all_quotes_data_dict:
+                all_quotes_data_dict[quote_name] = {}
+            all_quotes_data_dict[quote_name].update(current_quote_data_entry)
+            if "sectors" not in all_quotes_data_dict[quote_name]: # Ensure a "sectors" entry
+                all_quotes_data_dict[quote_name]["sectors"] = [] # Initialize to an empty list
+
             all_quotes_data_dict[quote_name] = current_quote_data_entry
             
     return file_path, root_date_qdate, all_quotes_data_dict
@@ -267,18 +275,6 @@ def save_config_file(file_name, items_list, config_type):
         QMessageBox.warning(None, f"{config_type} Config Save Error",
                             f"Could not save {config_type.lower()} to '{file_name}': {e}")
 
-def save_xml_to_file(file_path_to_save, root_element):
-    """Saves the XML ElementTree to a file with pretty printing."""
-    xml_str = ET.tostring(root_element, encoding='unicode')
-    dom = minidom.parseString(xml_str)
-    pretty_xml_str = dom.toprettyxml(indent="    ")
-    try:
-        with open(file_path_to_save, "w", encoding="utf-8") as f:
-            f.write('\n'.join(line for line in pretty_xml_str.split('\n') if line.strip()))
-        return True
-    except Exception as e:
-        QMessageBox.critical(None, "Error Saving File", f"Could not save file: {e}")
-        return False
 def save_xml_to_file(file_path_to_save, root_element):
     """Saves the XML ElementTree to a file with pretty printing."""
     xml_str = ET.tostring(root_element, encoding='unicode')

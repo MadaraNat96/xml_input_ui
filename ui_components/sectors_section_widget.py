@@ -8,6 +8,8 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from custom_widgets import HighlightableGroupBox
 from .ui_utils import _clear_qt_layout
 from typing import List, Dict
+import data_utils
+
 class SectorsSectionWidget(QWidget):
     sectorValueChanged = pyqtSignal(str, str, str) # sector name, field (type/name), new value
 
@@ -74,7 +76,7 @@ class SectorsSectionWidget(QWidget):
             if sector_name_str in all_sectors:
                 name_combo.setCurrentText(sector_name_str)
             else:
-                name_combo.setCurrentIndex(-1)  # No selection if not in the list
+                name_combo.setCurrentText(sector_name_str)  # Set the text even if it's not in the list
 
         name_combo.currentTextChanged.connect(lambda new_name, ed=entry_data: self._handle_sector_value_changed(ed, "name", new_name))
         type_combo.currentTextChanged.connect(lambda new_type, ed=entry_data: self._handle_sector_value_changed(ed, "type", new_type))
@@ -117,16 +119,16 @@ class SectorsSectionWidget(QWidget):
         return h_layout
 
 
-    def load_sectors_from_db(self, quote_name):
+    def load_sectors_from_db(self, quote_name, all_quotes_data=None):
         """Loads sector data from the database for the given quote.
 
-        Args:
-            quote_name: The name of the quote for which to load sectors.
+        This is a placeholder. Replace with your actual database interaction.
         """
-        # Assume you have a method in your data_utils or a separate module
-        # to fetch sector data from the database. This is a placeholder.
-        # Replace this with your actual database interaction.
-        sectors_data: List[Dict] = self.fetch_sectors_from_db(quote_name)  # See fetch_sectors_from_db.
+        # TODO: Implement the database fetching logic here.  For example:
+        # sectors_data = self.database_manager.get_sectors_for_quote(quote_name)
+        # where `self.database_manager` would be an instance of a class
+        # handling your database interactions.
+        sectors_data: List[Dict] = self.fetch_sectors_from_db(quote_name, all_quotes_data)  # See fetch_sectors_from_db.
 
         if sectors_data:
             # Clear existing sectors in the UI before loading from the database.
@@ -172,14 +174,6 @@ class SectorsSectionWidget(QWidget):
         return [{"name": e["name"], "type": e["type_combo"].currentText()}
                 for e in self.sectors_entries]
 
-    def clear_data(self):
-        for entry in self.sectors_entries:
-            if "type_combo" in entry:  # Add a check to ensure the key exists
-                entry["type_combo"].blockSignals(True)
-                entry["type_combo"].setCurrentText("")  # Clear the selection
-                entry["type_combo"].blockSignals(False)
-                entry["current_type"] = ""  # Resetting the current type
-
     def _add_new_sector(self):
         all_sectors = self.sectors_provider_func()
         if not all_sectors:
@@ -207,6 +201,14 @@ class SectorsSectionWidget(QWidget):
                     widget.deleteLater()
                 self.sectors_entries.remove(entry)
                 break  # Assuming sector names are unique, so we can stop after removing
+    
+    def clear_data(self):
+        for entry in self.sectors_entries:
+            if "type_combo" in entry:  # Add a check to ensure the key exists
+                entry["type_combo"].blockSignals(True)
+                entry["type_combo"].setCurrentText("")  # Clear the selection
+                entry["type_combo"].blockSignals(False)
+                entry["current_type"] = ""  # Resetting the current type
 
     def update_sector_name_in_ui(self, old_name, new_name):
         for entry in self.sectors_entries:
@@ -215,7 +217,7 @@ class SectorsSectionWidget(QWidget):
 
     # Placeholder for fetching sector data from the database.
     # Replace with your actual database interaction logic.
-    def fetch_sectors_from_db(self, quote_name) -> List[Dict]:
+    def fetch_sectors_from_db(self, quote_name, all_quotes_data) -> List[Dict]:
         """Fetches sectors for the given quote from the database.
 
         Args:
@@ -226,11 +228,7 @@ class SectorsSectionWidget(QWidget):
             and has "name" and "type" keys.
             Returns an empty list if no sectors are found.
         """
-        # Example using a hypothetical function in data_utils:
-        # return data_utils.get_sectors_for_quote_from_db(quote_name)
-
-        # Placeholder return:
-        return [] # Replace with actual database query
+        return all_quotes_data[quote_name]["sectors"] # Replace with actual database query
 
     def _handle_sector_value_changed(self, entry_data, field_name, new_val):
         old_val = entry_data.get(f"current_{field_name}", "")
