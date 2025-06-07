@@ -28,7 +28,7 @@ class FileManager:
         if not file_path:
             return None, None, None
 
-        root_date, quotes_data = data_utils.parse_xml_data(file_path)
+        file_path, root_date, quotes_data = data_utils.parse_xml_data(file_path)
         if root_date is not None or quotes_data is not None: # Allow opening even if one part is missing but file is valid
             self.current_file_path = file_path
             return self.current_file_path, root_date, quotes_data

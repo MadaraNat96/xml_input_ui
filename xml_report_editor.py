@@ -340,7 +340,7 @@ class XmlReportEditor(QMainWindow):
         self.quote_selection_widget.clear_input()
         self._set_displayed_quote_ui_enabled(False)
         # self.current_file_path = None # This is managed by FileManager, but reset it here too for consistency
-        if self.file_manager: self.file_manager.current_file_path = None
+        # if self.file_manager: self.file_manager.current_file_path = None
         self.command_manager.clear_stacks()
         self._set_dirty_flag(False)
 
