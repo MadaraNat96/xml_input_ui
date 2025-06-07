@@ -5,7 +5,8 @@ import data_utils # For get_default_working_date
 from commands import (
     ChangeRootDateCommand, ChangeQuoteDetailCommand, ChangeEPriceValueCommand,
     ChangePEValueCommand, ChangeEPSValueCommand,
-    AddEPSYearCommand, RemoveEPSYearCommand, ChangeEPSYearDisplayCommand,
+    AddEPSYearCommand, RemoveEPSYearCommand,
+    ChangeEPSYearDisplayCommand,
     ChangeEPSCompaniesForYearDisplayCommand, AddRecordReportCommand,
     RemoveRecordReportCommand, ChangeRecordReportDetailCommand
 )
@@ -179,3 +180,21 @@ class EditorActionHandler:
             current_quote_eps_data = self.editor.all_quotes_data.get(self.editor.selected_quote_name, {}).get("eps", [])
             self.editor.eps_growth_chart_widget.load_data(current_quote_eps_data) # Reload data for safety
             self.editor.eps_growth_chart_widget.update_chart(year_name_changed) # Then update with specific year
+
+    # --- Sector Handlers ---
+    def handle_sector_value_changed(self, sector_name, field, new_value):
+        if not self.editor.selected_quote_name: return
+        quote_name = self.editor.selected_quote_name
+        old_value = next((s.get(field, "") for s in self.editor.all_quotes_data.get(quote_name, {}).get("sectors", []) if s.get("name") == sector_name), "")
+        cmd = commands.ChangeSectorsCommand(self.editor.sectors_section_widget, self.editor.all_quotes_data,
+                                            quote_name, sector_name, field, old_value, new_value)
+        self.editor.execute_command(cmd)
+
+    # --- Sector Handlers ---
+    def handle_sector_value_changed(self, sector_name, field, new_value):
+        if not self.editor.selected_quote_name: return
+        quote_name = self.editor.selected_quote_name
+        old_value = next((s.get(field, "") for s in self.editor.all_quotes_data.get(quote_name, {}).get("sectors", []) if s.get("name") == sector_name), "")
+        cmd = commands.ChangeSectorsCommand(self.editor.sectors_section_widget, self.editor.all_quotes_data,
+                                            quote_name, sector_name, field, old_value, new_value)
+        self.editor.execute_command(cmd)

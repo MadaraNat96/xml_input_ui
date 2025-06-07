@@ -1,5 +1,5 @@
 # t:\Work\xml_input_ui\custom_widgets.py
-from PyQt6.QtWidgets import QLineEdit, QGroupBox
+from PyQt6.QtWidgets import QLineEdit, QGroupBox, QComboBox
 from PyQt6.QtCore import pyqtSignal, Qt
 
 class HighlightableGroupBox(QGroupBox):
@@ -34,7 +34,31 @@ class FocusAwareLineEdit(QLineEdit):
     def focusOutEvent(self, event):
         # Important: Check if the new focus widget is still within the same group box.
         # This simple version doesn't do that, so tabbing between LineEdits in the same
-        # group box will cause a brief unhighlight/highlight flicker.
-        # A more complex solution would involve checking event.reason() or new focus widget.
+        # group box will cause a brief unhighlight/highlight flicker. A more robust
+        # solution would involve checking event.reason() or new focus widget.
         self.focusLostSignal.emit(self.company_name, self)
         super().focusOutEvent(event)
+
+class FocusAwareComboBox(QComboBox):
+    focusGainedSignal = pyqtSignal(str, QComboBox)
+    focusLostSignal = pyqtSignal(str, QComboBox)
+
+    def __init__(self, company_name, parent=None):
+        super().__init__(parent)
+        self.company_name = company_name
+
+    def focusInEvent(self, event):
+        self.focusGainedSignal.emit(self.company_name, self)
+        super().focusInEvent(event)
+
+class FocusAwareComboBox(QComboBox):
+    focusGainedSignal = pyqtSignal(str, QComboBox)
+    focusLostSignal = pyqtSignal(str, QComboBox)
+
+    def __init__(self, company_name, parent=None):
+        super().__init__(parent)
+        self.company_name = company_name
+
+    def focusInEvent(self, event):
+        self.focusGainedSignal.emit(self.company_name, self)
+        super().focusInEvent(event)

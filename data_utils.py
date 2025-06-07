@@ -6,6 +6,7 @@ from PyQt6.QtCore import QDate
 from PyQt6.QtWidgets import QMessageBox # For error messages directly from utils
 
 EPRICE_CONFIG_FILE = "eprice_companies.cfg"
+SECTORS_CONFIG_FILE = "sectors_list.cfg"
 
 def get_default_working_date():
     """Returns the current date, or the preceding Friday if today is a weekend."""
@@ -90,7 +91,7 @@ def parse_xml_data(file_path):
             
             current_quote_data_entry = {
                 "name": quote_name,
-                "price": quote_el.findtext("price", default=""),
+                "price": quote_el.findtext("price", default=""), "sectors": [],
                 "e_price": [], "eps": [], "pe": [], "record": []
             }
             
@@ -132,6 +133,14 @@ def parse_xml_data(file_path):
                         "company": report_el.findtext("company", default=""),
                         "date": report_el.findtext("date", default=""),
                         "color": report_el.findtext("color", default="") # Read color
+                    })
+                    
+            sectors_parent_el = quote_el.find("sectors")
+            if sectors_parent_el is not None:
+                for sector_el in sectors_parent_el.findall("sector"):
+                    current_quote_data_entry["sectors"].append({
+                        "name": sector_el.findtext("name", default=""),
+                        "type": sector_el.findtext("type", default="main")  # Default to 'main'
                     })
             all_quotes_data_dict[quote_name] = current_quote_data_entry
             
@@ -190,7 +199,72 @@ def build_xml_tree(data_for_xml):
                 if color_value and color_value != "default": # Write color only if it's set and not "default"
                     ET.SubElement(report_el, "color").text = color_value
     return root_el
+    
+    quotes_el = ET.SubElement(root_el, "quotes") # Ensure <quotes> exists
+    for quote_name, quote_data in data.get("quotes", {}).items():
+        quote_el = ET.SubElement(quotes_el, "quote")
+        ET.SubElement(quote_el, "name").text = quote_data.get("name", "")
+        ET.SubElement(quote_el, "price").text = quote_data.get("price", "")
+        
+        # ... (rest of the code is unchanged up to the sectors part)
 
+    
+def load_sectors_config(default_sectors_list):
+    return load_config_file(SECTORS_CONFIG_FILE, default_sectors_list, "Sectors")
+
+def save_sectors_config(sectors_list):
+    save_config_file(SECTORS_CONFIG_FILE, sectors_list, "Sectors")
+
+def load_config_file(file_name, default_list, config_type):
+    loaded_items = []
+    if os.path.exists(file_name):
+        try:
+            with open(file_name, 'r', encoding='utf-8') as f:
+                for line in f:
+                    item_name = line.strip().upper()
+                    if item_name:
+                        loaded_items.append(item_name)
+        except Exception as e:
+            QMessageBox.warning(None, f"{config_type} Config Load Error",
+                                f"Could not load {config_type.lower()} from '{file_name}': {e}\n"
+                                f"Using default list.")
+            save_config_file(file_name, default_list, config_type)
+            return list(default_list) # Return a copy
+
+    unique_ordered_items = []
+    seen = set()
+    for item in loaded_items:
+        if item not in seen:
+            unique_ordered_items.append(item)
+            seen.add(item)
+
+    if unique_ordered_items:
+        return unique_ordered_items
+    else:
+        save_config_file(file_name, default_list, config_type)
+        return list(default_list)
+
+def save_config_file(file_name, items_list, config_type):
+    try:
+        with open(file_name, 'w', encoding='utf-8') as f:
+            for item_name in items_list:
+                f.write(f"{item_name}\n")
+    except Exception as e:
+        QMessageBox.warning(None, f"{config_type} Config Save Error",
+                            f"Could not save {config_type.lower()} to '{file_name}': {e}")
+
+def save_xml_to_file(file_path_to_save, root_element):
+    """Saves the XML ElementTree to a file with pretty printing."""
+    xml_str = ET.tostring(root_element, encoding='unicode')
+    dom = minidom.parseString(xml_str)
+    pretty_xml_str = dom.toprettyxml(indent="    ")
+    try:
+        with open(file_path_to_save, "w", encoding="utf-8") as f:
+            f.write('\n'.join(line for line in pretty_xml_str.split('\n') if line.strip()))
+        return True
+    except Exception as e:
+        QMessageBox.critical(None, "Error Saving File", f"Could not save file: {e}")
+        return False
 def save_xml_to_file(file_path_to_save, root_element):
     """Saves the XML ElementTree to a file with pretty printing."""
     xml_str = ET.tostring(root_element, encoding='unicode')

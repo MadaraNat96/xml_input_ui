@@ -13,6 +13,7 @@ from ui_components.quote_selection_widget import QuoteSelectionWidget
 from ui_components.quote_details_widget import QuoteDetailsWidget
 from ui_components.eprice_section_widget import EPriceSectionWidget
 from ui_components.pe_section_widget import PESectionWidget
+from ui_components.sectors_section_widget import SectorsSectionWidget 
 from ui_components.record_report_section_widget import RecordReportSectionWidget
 from ui_components.eps_growth_chart_widget import EPSGrowthChartWidget
 from custom_widgets import FocusAwareLineEdit, HighlightableGroupBox # Import custom widgets
@@ -44,6 +45,7 @@ class XmlReportEditor(QMainWindow):
         self.EPRICE_FIXED_COMPANIES = ["VCSC", "SSI", "MBS", "AGR", "BSC", "FPT", "CTG"] 
 
         self.file_manager = FileManager(self) # Instantiate FileManager
+        self.SECTOR_LIST = []  # Initialize SECTOR_LIST before it's used
         self.command_manager = CommandManager(self) # Instantiate CommandManager
         self.action_handler = EditorActionHandler(self) # Instantiate ActionHandler
         
@@ -51,6 +53,7 @@ class XmlReportEditor(QMainWindow):
         self.load_initial_data() 
         self._load_eprice_config_and_update_ui()
         self._apply_global_styles()
+        self._load_sectors_config_and_update_ui()
 
     def _apply_global_styles(self):
         self.setStyleSheet("""
@@ -145,6 +148,9 @@ class XmlReportEditor(QMainWindow):
         self.pe_section_widget = PESectionWidget(lambda: self.EPRICE_FIXED_COMPANIES, self) # PE uses same fixed list
         self.pe_section_widget.peValueChanged.connect(self.action_handler.handle_pe_value_changed) # Connect PE specific signal
         self.record_report_section_widget = RecordReportSectionWidget(lambda: self.EPRICE_FIXED_COMPANIES, self)
+
+        self.sectors_section_widget = SectorsSectionWidget(lambda: self.SECTOR_LIST, self) # Now SECTOR_LIST is initialized
+        self.sectors_section_widget.sectorValueChanged.connect(self.action_handler.handle_sector_value_changed)
         self.eps_growth_chart_widget = EPSGrowthChartWidget(self) # Instantiate the chart widget
         self.record_report_section_widget.recordReportAddRequested.connect(self.action_handler.handle_record_report_add_requested)
         self.record_report_section_widget.recordReportRemoveRequested.connect(self.action_handler.handle_record_report_remove_requested)
@@ -169,7 +175,7 @@ class XmlReportEditor(QMainWindow):
         column1_layout.addWidget(date_group)
         column1_layout.addWidget(self.quote_selection_widget)
         column1_layout.addWidget(self.quote_details_widget)
-        column1_layout.addSpacing(50) 
+        column1_layout.addWidget(self.sectors_section_widget)  # Add Sectors Section here
         column1_layout.addStretch() 
         
         column2_widget = QWidget() 
@@ -276,6 +282,10 @@ class XmlReportEditor(QMainWindow):
         self.pe_section_widget.refresh_structure(self.EPRICE_FIXED_COMPANIES) # PE uses the same list
         self.eps_section_widget.refresh_structure_with_new_fixed_companies(self.EPRICE_FIXED_COMPANIES)
         self.record_report_section_widget.update_company_dropdowns()
+
+    def _load_sectors_config_and_update_ui(self):
+        self.SECTOR_LIST = data_utils.load_sectors_config(["Bất động sản", "Ngân hàng", "Chứng khoán"])
+        self.sectors_section_widget.refresh_structure(self.SECTOR_LIST)
 
     def _handle_manage_eprice_companies_dialog(self):
         dialog = ManageEPriceCompaniesDialog(self.EPRICE_FIXED_COMPANIES, self)
