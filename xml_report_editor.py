@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QGroupBox, QMessageBox, QFileDialog, QStyle)
 from PyQt6.QtGui import QIcon, QAction, QKeySequence
 from PyQt6.QtCore import Qt, QDate, QPoint
-from dialogs import ManageEPriceCompaniesDialog # EPSYearSelectionDialog, EPriceCompanySelectionDialog are used internally by components
+from dialogs import ManageEPriceCompaniesDialog, ManageSectorsDialog
 from ui_components.eps_section_widget import EPSSectionWidget
 from ui_components.quote_selection_widget import QuoteSelectionWidget
 from ui_components.quote_details_widget import QuoteDetailsWidget
@@ -15,15 +15,15 @@ from ui_components.eprice_section_widget import EPriceSectionWidget
 from ui_components.pe_section_widget import PESectionWidget
 from ui_components.sectors_section_widget import SectorsSectionWidget 
 from ui_components.record_report_section_widget import RecordReportSectionWidget
-from ui_components.eps_growth_chart_widget import EPSGrowthChartWidget
+from ui_components.eps_growth_chart_widget import EPSGrowthChartWidget 
 from custom_widgets import FocusAwareLineEdit, HighlightableGroupBox # Import custom widgets
 from commands import (Command, ChangeRootDateCommand, ChangeQuoteDetailCommand, 
                       ChangeEPriceValueCommand, ChangePEValueCommand, AddQuoteCommand, RemoveQuoteCommand,
                       ChangeEPSValueCommand, AddEPSYearCommand, RemoveEPSYearCommand,
                       ChangeEPSYearDisplayCommand, ChangeEPSCompaniesForYearDisplayCommand,
                       AddRecordReportCommand, RemoveRecordReportCommand, ChangeRecordReportDetailCommand,
-                      ChangeEPriceFixedCompaniesCommand)
-from command_manager import CommandManager # Import the new CommandManager
+                      ChangeEPriceFixedCompaniesCommand, ChangeSectorsListCommand)
+from command_manager import CommandManager
 from editor_action_handler import EditorActionHandler # Import the new handler class
 from ui_managers import GlobalHighlightManager # Import the new manager
 from file_manager import FileManager # Import the new FileManager
@@ -258,6 +258,10 @@ class XmlReportEditor(QMainWindow):
         manage_eprice_action.triggered.connect(self._handle_manage_eprice_companies_dialog)
         edit_menu.addAction(manage_eprice_action)
 
+        manage_sectors_action = QAction("Manage Sectors...", self)
+        manage_sectors_action.triggered.connect(self._handle_manage_sectors_dialog)
+        edit_menu.addAction(manage_sectors_action)
+
     def _log_history(self, message):
         self.history_log_text_edit.append(message)
 
@@ -284,7 +288,7 @@ class XmlReportEditor(QMainWindow):
         self.record_report_section_widget.update_company_dropdowns()
 
     def _load_sectors_config_and_update_ui(self):
-        self.SECTOR_LIST = data_utils.load_sectors_config(["Bất động sản", "Ngân hàng", "Chứng khoán"])
+        self.SECTOR_LIST = data_utils.load_sectors_config(self.SECTOR_LIST)
         self.sectors_section_widget.refresh_structure(self.SECTOR_LIST)
 
     def _handle_manage_eprice_companies_dialog(self):
@@ -300,6 +304,17 @@ class XmlReportEditor(QMainWindow):
                 # calling _load_eprice_config_and_update_ui(), and saving the config.
                 QMessageBox.information(self, "Fixed Companies List Updated", 
                                         "The list of fixed companies (for E-Price and PE sections) has been updated.")
+
+    def _handle_manage_sectors_dialog(self):
+        dialog = ManageSectorsDialog(self.SECTOR_LIST, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            new_sectors_list = dialog.get_updated_sectors()
+            old_sectors_list = list(self.SECTOR_LIST)
+
+            if new_sectors_list != old_sectors_list:
+                cmd = ChangeSectorsListCommand(self, old_sectors_list, new_sectors_list)
+                self.execute_command(cmd)
+                self._load_sectors_config_and_update_ui()
 
     def save_current_eprice_config(self):
         """Saves the current EPRICE_FIXED_COMPANIES list to the config file."""
@@ -394,6 +409,8 @@ class XmlReportEditor(QMainWindow):
         self.record_report_section_widget.load_data(quote_data.get("record", []))
         
         self.quote_selection_widget.set_quote_name_input(quote_name)
+        # Load sectors from the database
+        self.sectors_section_widget.load_sectors_from_db(quote_name)
         self._set_displayed_quote_ui_enabled(True)
 
     def _save_displayed_quote_data(self):

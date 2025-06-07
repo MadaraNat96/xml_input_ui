@@ -1,6 +1,7 @@
 # t:\Work\xml_input_ui\commands.py
 from abc import ABC, abstractmethod
 from PyQt6.QtCore import QDate
+import data_utils
 
 class Command(ABC):
     """Abstract base class for commands."""
@@ -551,115 +552,7 @@ class ChangeEPriceFixedCompaniesCommand(Command):
             # data_utils.save_eprice_config is called within _load_eprice_config_and_update_ui
             # if the list actually changed and needs saving, or we can call it explicitly.
             self.editor_ref.save_current_eprice_config()
-
-class ChangeSectorsCommand(Command):
-    def __init__(self, sectors_section_widget, all_quotes_data_ref, quote_name_key, sector_name, field, old_value, new_value):
-        super().__init__(description=f"Change {quote_name_key}'s sector '{sector_name}' {field} from '{old_value}' to '{new_value}'")
-        self.sectors_section_widget = sectors_section_widget
-        self.all_quotes_data_ref = all_quotes_data_ref
-        self.quote_name_key = quote_name_key
-        self.sector_name = sector_name
-        self.field = field
-        self.old_value = old_value
-        self.new_value = new_value
-
-    def _find_sector_data(self, quote_data):
-        if "sectors" not in quote_data:
-            quote_data["sectors"] = []
-
-        for sector_data in quote_data["sectors"]:
-            if sector_data.get("name") == self.sector_name:
-                return sector_data
-        new_sector_data = {"name": self.sector_name, "type": "main"} # Default sector type
-        quote_data["sectors"].append(new_sector_data)
-        return new_sector_data
-
-    def execute(self):
-        if self.quote_name_key in self.all_quotes_data_ref:
-            quote_data = self.all_quotes_data_ref[self.quote_name_key]
-            sector_data = self._find_sector_data(quote_data)
-            sector_data[self.field] = self.new_value
-        self.sectors_section_widget.update_sector_value(self.sector_name, self.field, self.new_value, from_command=True)
-
-    def unexecute(self):
-        if self.quote_name_key in self.all_quotes_data_ref:
-            quote_data = self.all_quotes_data_ref[self.quote_name_key]
-            sector_data = self._find_sector_data(quote_data) # Use find, as execute might add it
-            sector_data[self.field] = self.old_value
-        self.sectors_section_widget.update_sector_value(self.sector_name, self.field, self.old_value, from_command=True)
-
-class ChangeSectorsCommand(Command):
-    def __init__(self, sectors_section_widget, all_quotes_data_ref, quote_name_key, sector_name, field, old_value, new_value):
-        super().__init__(description=f"Change {quote_name_key}'s sector '{sector_name}' {field} from '{old_value}' to '{new_value}'")
-        self.sectors_section_widget = sectors_section_widget
-        self.all_quotes_data_ref = all_quotes_data_ref
-        self.quote_name_key = quote_name_key
-        self.sector_name = sector_name
-        self.field = field
-        self.old_value = old_value
-        self.new_value = new_value
-
-    def _find_sector_data(self, quote_data):
-        if "sectors" not in quote_data:
-            quote_data["sectors"] = []
-
-        for sector_data in quote_data["sectors"]:
-            if sector_data.get("name") == self.sector_name:
-                return sector_data
-        new_sector_data = {"name": self.sector_name, "type": "main"} # Default sector type
-        quote_data["sectors"].append(new_sector_data)
-        return new_sector_data
-
-    def execute(self):
-        if self.quote_name_key in self.all_quotes_data_ref:
-            quote_data = self.all_quotes_data_ref[self.quote_name_key]
-            sector_data = self._find_sector_data(quote_data)
-            sector_data[self.field] = self.new_value
-        self.sectors_section_widget.update_sector_value(self.sector_name, self.field, self.new_value, from_command=True)
-
-    def unexecute(self):
-        if self.quote_name_key in self.all_quotes_data_ref:
-            quote_data = self.all_quotes_data_ref[self.quote_name_key]
-            sector_data = self._find_sector_data(quote_data) # Use find, as execute might add it
-            sector_data[self.field] = self.old_value
-        self.sectors_section_widget.update_sector_value(self.sector_name, self.field, self.old_value, from_command=True)
-
-class ChangeSectorsCommand(Command):
-    def __init__(self, sectors_section_widget, all_quotes_data_ref, quote_name_key, sector_name, field, old_value, new_value):
-        super().__init__(description=f"Change {quote_name_key}'s sector '{sector_name}' {field} from '{old_value}' to '{new_value}'")
-        self.sectors_section_widget = sectors_section_widget
-        self.all_quotes_data_ref = all_quotes_data_ref
-        self.quote_name_key = quote_name_key
-        self.sector_name = sector_name
-        self.field = field
-        self.old_value = old_value
-        self.new_value = new_value
-
-    def _find_sector_data(self, quote_data):
-        if "sectors" not in quote_data:
-            quote_data["sectors"] = []
-
-        for sector_data in quote_data["sectors"]:
-            if sector_data.get("name") == self.sector_name:
-                return sector_data
-        new_sector_data = {"name": self.sector_name, "type": "main"} # Default sector type
-        quote_data["sectors"].append(new_sector_data)
-        return new_sector_data
-
-    def execute(self):
-        if self.quote_name_key in self.all_quotes_data_ref:
-            quote_data = self.all_quotes_data_ref[self.quote_name_key]
-            sector_data = self._find_sector_data(quote_data)
-            sector_data[self.field] = self.new_value
-        self.sectors_section_widget.update_sector_value(self.sector_name, self.field, self.new_value, from_command=True)
-
-    def unexecute(self):
-        if self.quote_name_key in self.all_quotes_data_ref:
-            quote_data = self.all_quotes_data_ref[self.quote_name_key]
-            sector_data = self._find_sector_data(quote_data) # Use find, as execute might add it
-            sector_data[self.field] = self.old_value
-        self.sectors_section_widget.update_sector_value(self.sector_name, self.field, self.old_value, from_command=True)
-
+    
     def unexecute(self):
         if self.editor_ref:
             # Revert the editor's list
@@ -667,3 +560,87 @@ class ChangeSectorsCommand(Command):
             # Trigger UI refresh and save config
             self.editor_ref._load_eprice_config_and_update_ui()
             self.editor_ref.save_current_eprice_config() # New method in editor
+
+
+class ChangeSectorsCommand(Command):
+    def __init__(self, sectors_section_widget, all_quotes_data_ref, quote_name_key, sector_name, field, old_value, new_value):
+        super().__init__(description=f"Change {quote_name_key}'s sector '{sector_name}' {field} from '{old_value}' to '{new_value}'")
+        self.sectors_section_widget = sectors_section_widget
+        self.all_quotes_data_ref = all_quotes_data_ref
+        self.quote_name_key = quote_name_key
+        self.sector_name = sector_name
+        self.field = field
+        self.old_value = old_value
+        self.new_value = new_value
+
+    def _find_sector_data(self, quote_data):
+        if "sectors" not in quote_data:
+            quote_data["sectors"] = []
+
+        for sector_data in quote_data["sectors"]:
+            if sector_data.get("name") == self.sector_name:
+                return sector_data
+        new_sector_data = {"name": self.sector_name, "type": "main"} # Default sector type
+        quote_data["sectors"].append(new_sector_data)
+        return new_sector_data
+
+    def execute(self):
+        if self.quote_name_key in self.all_quotes_data_ref:
+            quote_data = self.all_quotes_data_ref[self.quote_name_key]
+            sector_data = self._find_sector_data(quote_data) # Ensure sector entry exists in data model.
+            if self.field == "name" and not self.new_value: # Don't store an empty sector name
+                return
+            sector_data[self.field] = self.new_value
+        if self.field == "name": self.sectors_section_widget.update_sector_name_in_ui(self.sector_name, self.new_value)
+        self.sectors_section_widget.update_sector_value(self.sector_name, self.field, self.new_value, from_command=True)
+
+    def unexecute(self):
+        if self.quote_name_key in self.all_quotes_data_ref:
+            quote_data = self.all_quotes_data_ref[self.quote_name_key]
+            sector_data = self._find_sector_data(quote_data) # Use find, as execute might add it
+            sector_data[self.field] = self.old_value
+        self.sectors_section_widget.update_sector_value(self.sector_name, self.field, self.old_value, from_command=True)
+
+
+class RemoveSectorCommand(Command):
+    def __init__(self, sectors_section_widget, all_quotes_data_ref, quote_name_key, sector_name):
+        super().__init__(description=f"Remove sector '{sector_name}' from '{quote_name_key}'")
+        self.sectors_section_widget = sectors_section_widget
+        self.all_quotes_data_ref = all_quotes_data_ref
+        self.quote_name_key = quote_name_key
+        self.sector_name = sector_name
+        self.removed_sector_data = None
+
+    def execute(self):
+        if self.quote_name_key in self.all_quotes_data_ref and "sectors" in self.all_quotes_data_ref[self.quote_name_key]:
+            quote_data = self.all_quotes_data_ref[self.quote_name_key]
+            for i, sector_data in enumerate(quote_data["sectors"]):
+                if sector_data.get("name") == self.sector_name:
+                    self.removed_sector_data = quote_data["sectors"].pop(i)
+                    break
+        self.sectors_section_widget._remove_sector_ui(self.sector_name)
+
+    def unexecute(self):
+        if self.quote_name_key in self.all_quotes_data_ref and self.removed_sector_data:
+            self.all_quotes_data_ref[self.quote_name_key].setdefault("sectors", []).append(self.removed_sector_data)
+        self.sectors_section_widget._create_sector_ui(self.sector_name, self.removed_sector_data.get("type", "main"))
+
+class ChangeSectorsListCommand(Command):
+    def __init__(self, editor_ref, old_sectors_list, new_sectors_list):
+        super().__init__(description="Change Sectors List")
+        self.editor_ref = editor_ref
+        self.old_sectors_list = list(old_sectors_list) # Create a copy
+        self.new_sectors_list = list(new_sectors_list) # Create a copy
+
+    def execute(self):
+        if self.editor_ref:
+            self.editor_ref.SECTOR_LIST = self.new_sectors_list # Update sector list
+            self.editor_ref._load_sectors_config_and_update_ui()
+            data_utils.save_sectors_config(self.new_sectors_list)
+            self.editor_ref.save_xml_file() # Trigger a save of the main XML data
+
+
+    def unexecute(self):
+        if self.editor_ref:
+            self.editor_ref.SECTOR_LIST = list(self.old_sectors_list) # Revert
+            self.editor_ref._load_sectors_config_and_update_ui()

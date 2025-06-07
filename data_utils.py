@@ -171,42 +171,56 @@ def build_xml_tree(data_for_xml):
         if eps_data_list:
             eps_el_parent = ET.SubElement(quote_el, "eps")
             for year_data in eps_data_list:
-                year_el = ET.SubElement(eps_el_parent, "year")
-                ET.SubElement(year_el, "name").text = year_data.get("name", "")
-                companies_list_for_year = year_data.get("companies", [])
-                for company_data_eps in companies_list_for_year:
-                    company_el = ET.SubElement(year_el, "company")
-                    ET.SubElement(company_el, "name").text = company_data_eps.get("name", "")
-                    ET.SubElement(company_el, "value").text = company_data_eps.get("value", "")
-                    ET.SubElement(company_el, "growth").text = company_data_eps.get("growth", "")
+                _add_eps_year_element(eps_el_parent, year_data)
 
         pe_data_list = quote_data.get("pe", [])
         if pe_data_list:
             pe_el_parent = ET.SubElement(quote_el, "pe")
             for company_data in pe_data_list:
-                company_el = ET.SubElement(pe_el_parent, "company")
-                ET.SubElement(company_el, "name").text = company_data.get("name", "")
-                ET.SubElement(company_el, "value").text = company_data.get("value", "")
+                _add_company_element(pe_el_parent, company_data)
 
         record_data_list = quote_data.get("record", [])
         if record_data_list:
             record_el_parent = ET.SubElement(quote_el, "record")
             for report_data in record_data_list:
-                report_el = ET.SubElement(record_el_parent, "report")
-                ET.SubElement(report_el, "company").text = report_data.get("company", "")
-                ET.SubElement(report_el, "date").text = report_data.get("date", "")
-                color_value = report_data.get("color")
-                if color_value and color_value != "default": # Write color only if it's set and not "default"
-                    ET.SubElement(report_el, "color").text = color_value
+                _add_report_element(record_el_parent, report_data)
+
+        # Add Sectors data
+        sectors_data_list = quote_data.get("sectors", [])
+        if sectors_data_list:
+            sectors_el_parent = ET.SubElement(quote_el, "sectors")
+            for sector_data in sectors_data_list:
+                _add_sector_element(sectors_el_parent, sector_data)
     return root_el
     
-    quotes_el = ET.SubElement(root_el, "quotes") # Ensure <quotes> exists
-    for quote_name, quote_data in data.get("quotes", {}).items():
-        quote_el = ET.SubElement(quotes_el, "quote")
-        ET.SubElement(quote_el, "name").text = quote_data.get("name", "")
-        ET.SubElement(quote_el, "price").text = quote_data.get("price", "")
-        
-        # ... (rest of the code is unchanged up to the sectors part)
+# Helper functions to add elements
+def _add_company_element(parent, company_data):
+    company_el = ET.SubElement(parent, "company")
+    ET.SubElement(company_el, "name").text = company_data.get("name", "")
+    ET.SubElement(company_el, "value").text = company_data.get("value", "")
+
+def _add_eps_year_element(parent, year_data):
+    year_el = ET.SubElement(parent, "year")
+    ET.SubElement(year_el, "name").text = year_data.get("name", "")
+    for company_data_eps in year_data.get("companies", []):
+        company_el = ET.SubElement(year_el, "company")
+        ET.SubElement(company_el, "name").text = company_data_eps.get("name", "")
+        ET.SubElement(company_el, "value").text = company_data_eps.get("value", "")
+        ET.SubElement(company_el, "growth").text = company_data_eps.get("growth", "")
+
+def _add_report_element(parent, report_data):
+    report_el = ET.SubElement(parent, "report")
+    ET.SubElement(report_el, "company").text = report_data.get("company", "")
+    ET.SubElement(report_el, "date").text = report_data.get("date", "")
+    color_value = report_data.get("color")
+    if color_value and color_value != "default":
+        ET.SubElement(report_el, "color").text = color_value
+
+def _add_sector_element(parent, sector_data):
+    sector_el = ET.SubElement(parent, "sector")
+    ET.SubElement(sector_el, "name").text = sector_data.get("name", "")
+    ET.SubElement(sector_el, "type").text = sector_data.get("type", "main") # Ensure default is "main"
+
 
     
 def load_sectors_config(default_sectors_list):

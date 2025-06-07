@@ -152,3 +152,114 @@ class ManageEPriceCompaniesDialog(QDialog):
 
     def get_updated_companies(self):
         return [self.list_widget.item(i).text() for i in range(self.list_widget.count())]
+
+class SectorSelectionDialog(QDialog):
+    def __init__(self, all_sector_names, currently_selected_names, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Choose Sectors to Display")
+        self.setMinimumWidth(300)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel("Select sectors to display from the list below:"))
+
+        self.list_widget = QListWidget()
+        self.list_widget.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
+
+        for name in all_sector_names:
+            self.list_widget.addItem(name)
+            if name in currently_selected_names:
+                items = self.list_widget.findItems(name, Qt.MatchFlag.MatchExactly)
+                if items:
+                    items[0].setSelected(True)
+
+        layout.addWidget(self.list_widget)
+
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+    def get_selected_sectors(self):
+        return [item.text() for item in self.list_widget.selectedItems()]
+
+class ManageSectorsDialog(QDialog):
+    def __init__(self, current_sectors, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Manage Sectors")
+        self.setMinimumSize(400, 300)
+        self.sectors = [s.upper() for s in current_sectors]
+
+        main_layout = QVBoxLayout(self)
+
+        self.list_widget = QListWidget()
+        self.list_widget.addItems(self.sectors)
+        main_layout.addWidget(self.list_widget)
+
+        add_layout = QHBoxLayout()
+        self.new_sector_edit = QLineEdit()
+        self.new_sector_edit.setPlaceholderText("Enter new sector name")
+        add_button = QPushButton("Add Sector")
+        add_button.clicked.connect(self._add_sector)
+        add_layout.addWidget(self.new_sector_edit)
+        add_layout.addWidget(add_button)
+        main_layout.addLayout(add_layout)
+
+        actions_layout = QHBoxLayout()
+        remove_button = QPushButton("Remove Selected Sector")
+        remove_button.clicked.connect(self._remove_sector)
+        actions_layout.addWidget(remove_button)
+
+        move_up_button = QPushButton("Move Up")
+        move_up_button.clicked.connect(self._move_item_up)
+        actions_layout.addWidget(move_up_button)
+
+        move_down_button = QPushButton("Move Down")
+        move_down_button.clicked.connect(self._move_item_down)
+        actions_layout.addWidget(move_down_button)
+
+        main_layout.addLayout(actions_layout)
+
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        main_layout.addWidget(button_box)
+
+    def _add_sector(self):
+        sector_name = self.new_sector_edit.text().strip().upper()
+        if sector_name:
+            if sector_name not in [self.list_widget.item(i).text() for i in range(self.list_widget.count())]:
+                self.list_widget.addItem(sector_name)
+                self.new_sector_edit.clear()
+            else:
+                QMessageBox.information(self, "Duplicate", f"Sector '{sector_name}' already in the list.")
+        else:
+            QMessageBox.warning(self, "Input Error", "Sector name cannot be empty.")
+
+    def _remove_sector(self):
+        selected_items = self.list_widget.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "Selection Error", "Please select a sector to remove.")
+            return
+        for item in selected_items:
+            self.list_widget.takeItem(self.list_widget.row(item))
+
+    def _move_item_up(self):
+        current_item = self.list_widget.currentItem()
+        if current_item:
+            current_row = self.list_widget.row(current_item)
+            if current_row > 0:
+                item = self.list_widget.takeItem(current_row)
+                self.list_widget.insertItem(current_row - 1, item)
+                self.list_widget.setCurrentItem(item)
+
+    def _move_item_down(self):
+        current_item = self.list_widget.currentItem()
+        if current_item:
+            current_row = self.list_widget.row(current_item)
+            if current_row < self.list_widget.count() - 1:
+                item = self.list_widget.takeItem(current_row)
+                self.list_widget.insertItem(current_row + 1, item)
+                self.list_widget.setCurrentItem(item)
+
+    def get_updated_sectors(self):
+        return [self.list_widget.item(i).text() for i in range(self.list_widget.count())]

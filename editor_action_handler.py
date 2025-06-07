@@ -6,9 +6,10 @@ from commands import (
     ChangeRootDateCommand, ChangeQuoteDetailCommand, ChangeEPriceValueCommand,
     ChangePEValueCommand, ChangeEPSValueCommand,
     AddEPSYearCommand, RemoveEPSYearCommand,
-    ChangeEPSYearDisplayCommand,
+    ChangeEPSYearDisplayCommand, RemoveSectorCommand,
     ChangeEPSCompaniesForYearDisplayCommand, AddRecordReportCommand,
-    RemoveRecordReportCommand, ChangeRecordReportDetailCommand
+    RemoveRecordReportCommand, ChangeRecordReportDetailCommand,
+    ChangeSectorsCommand
 )
 
 class EditorActionHandler:
@@ -186,8 +187,17 @@ class EditorActionHandler:
         if not self.editor.selected_quote_name: return
         quote_name = self.editor.selected_quote_name
         old_value = next((s.get(field, "") for s in self.editor.all_quotes_data.get(quote_name, {}).get("sectors", []) if s.get("name") == sector_name), "")
-        cmd = commands.ChangeSectorsCommand(self.editor.sectors_section_widget, self.editor.all_quotes_data,
+        cmd = ChangeSectorsCommand(self.editor.sectors_section_widget, self.editor.all_quotes_data,
                                             quote_name, sector_name, field, old_value, new_value)
+        self.editor.execute_command(cmd)
+
+    def handle_remove_sector(self, sector_name):
+        if not self.editor.selected_quote_name:
+            return
+
+        quote_name = self.editor.selected_quote_name
+        cmd = RemoveSectorCommand(self.editor.sectors_section_widget, self.editor.all_quotes_data,
+                                 quote_name, sector_name)
         self.editor.execute_command(cmd)
 
     # --- Sector Handlers ---
@@ -195,6 +205,6 @@ class EditorActionHandler:
         if not self.editor.selected_quote_name: return
         quote_name = self.editor.selected_quote_name
         old_value = next((s.get(field, "") for s in self.editor.all_quotes_data.get(quote_name, {}).get("sectors", []) if s.get("name") == sector_name), "")
-        cmd = commands.ChangeSectorsCommand(self.editor.sectors_section_widget, self.editor.all_quotes_data,
+        cmd = ChangeSectorsCommand(self.editor.sectors_section_widget, self.editor.all_quotes_data,
                                             quote_name, sector_name, field, old_value, new_value)
         self.editor.execute_command(cmd)

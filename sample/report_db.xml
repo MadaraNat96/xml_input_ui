@@ -5,16 +5,6 @@
         <quote>
             <name>BID</name>
             <price>40001</price>
-            <sectors>
-                <sector>
-                    <name>Ngân hàng</name>
-                    <type>main</type>
-                </sector>
-                <sector>
-                    <name>Chứng khoán</name>
-                    <type>sub</type>
-                </sector>
-            </sectors>
             <e_price>
                 <company>
                     <name>SSI</name>
@@ -322,6 +312,16 @@
                     <color>red</color>
                 </report>
             </record>
+            <sectors>
+                <sector>
+                    <name>CHỨNG KHOÁN</name>
+                    <type>sub</type>
+                </sector>
+                <sector>
+                    <name>NGÂN HÀNG</name>
+                    <type>main</type>
+                </sector>
+            </sectors>
         </quote>
         <quote>
             <name>VCB</name>
