@@ -1,9 +1,9 @@
 # t:\Work\xml_input_ui\ui_components\quote_selection_widget.py
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QPushButton,
-    QLineEdit, QApplication, QStyle
+    QLineEdit, QApplication, QStyle, QCompleter
 )
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import pyqtSignal, Qt, QStringListModel
 
 class QuoteSelectionWidget(QWidget):
     selectQuoteClicked = pyqtSignal(str)
@@ -13,6 +13,7 @@ class QuoteSelectionWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._init_ui()
+        self.update_quote_list([]) # Initialize with empty list
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
@@ -24,8 +25,13 @@ class QuoteSelectionWidget(QWidget):
         quote_selection_layout.setSpacing(3)
 
         search_actions_layout = QHBoxLayout()
+
         self.quote_search_edit = QLineEdit()
         self.quote_search_edit.setPlaceholderText("Enter Quote Name to Select/Add")
+        self.completer = QCompleter()
+        self.quote_search_edit.setCompleter(self.completer)
+        self.quote_list_model = QStringListModel()
+        self.completer.setModel(self.quote_list_model)
         search_actions_layout.addWidget(self.quote_search_edit, 1)
 
         self.select_quote_button = QPushButton(icon=QApplication.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogContentsView))
@@ -61,6 +67,12 @@ class QuoteSelectionWidget(QWidget):
 
     def set_quote_name_input(self, name):
         self.quote_search_edit.setText(name)
+
+    def update_quote_list(self, quote_names):
+        """Updates the suggestions for quote names based on filtering."""
+        self.quote_list_model.setStringList(quote_names)
+        self.completer.popup().setMinimumWidth(self.quote_search_edit.width()) # Adjust popup width
+        self.completer.setCompletionMode(QCompleter.CompletionMode.UnfilteredPopupCompletion) # Show all options
 
     def clear_input(self):
         self.quote_search_edit.clear()

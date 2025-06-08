@@ -15,7 +15,7 @@ from ui_components.eprice_section_widget import EPriceSectionWidget
 from ui_components.pe_section_widget import PESectionWidget
 from ui_components.sectors_section_widget import SectorsSectionWidget 
 from ui_components.record_report_section_widget import RecordReportSectionWidget
-from ui_components.eps_growth_chart_widget import EPSGrowthChartWidget 
+from ui_components.eps_growth_chart_widget import EPSGrowthChartWidget
 from custom_widgets import FocusAwareLineEdit, HighlightableGroupBox # Import custom widgets
 from commands import (Command, ChangeRootDateCommand, ChangeQuoteDetailCommand, 
                       ChangeEPriceValueCommand, ChangePEValueCommand, AddQuoteCommand, RemoveQuoteCommand,
@@ -23,6 +23,7 @@ from commands import (Command, ChangeRootDateCommand, ChangeQuoteDetailCommand,
                       ChangeEPSYearDisplayCommand, ChangeEPSCompaniesForYearDisplayCommand,
                       AddRecordReportCommand, RemoveRecordReportCommand, ChangeRecordReportDetailCommand,
                       ChangeEPriceFixedCompaniesCommand, ChangeSectorsListCommand)
+from ui_components.quote_filter_widget import QuoteFilterWidget
 from command_manager import CommandManager
 from editor_action_handler import EditorActionHandler # Import the new handler class
 from ui_managers import GlobalHighlightManager # Import the new manager
@@ -153,6 +154,11 @@ class XmlReportEditor(QMainWindow):
         self.sectors_section_widget.sectorValueChanged.connect(self.action_handler.handle_sector_value_changed)
         self.eps_growth_chart_widget = EPSGrowthChartWidget(self) # Instantiate the chart widget
         self.sectors_section_widget.sectorRemoved.connect(self.action_handler.handle_remove_sector)
+
+        # Instantiate Quote Filter Widget
+        self.quote_filter_widget = QuoteFilterWidget(lambda: self.SECTOR_LIST)
+        self.quote_filter_widget.filterChanged.connect(self.handle_sector_filter_changed)
+
         self.record_report_section_widget.recordReportAddRequested.connect(self.action_handler.handle_record_report_add_requested)
         self.record_report_section_widget.recordReportRemoveRequested.connect(self.action_handler.handle_record_report_remove_requested)
         self.record_report_section_widget.recordReportDetailChanged.connect(self.action_handler.handle_record_report_detail_changed)
@@ -177,6 +183,7 @@ class XmlReportEditor(QMainWindow):
         column1_layout.addWidget(self.quote_selection_widget)
         column1_layout.addWidget(self.quote_details_widget)
         column1_layout.addWidget(self.sectors_section_widget)  # Add Sectors Section here
+        column1_layout.addWidget(self.quote_filter_widget)  # Add Quote Filter Section here
         column1_layout.addStretch() 
         
         column2_widget = QWidget() 
@@ -210,6 +217,8 @@ class XmlReportEditor(QMainWindow):
 
         self._set_displayed_quote_ui_enabled(False) 
         self._create_menu_bar()
+        self._load_sectors_config_and_update_ui()
+        self.quote_filter_widget.refresh_sectors()
 
     def _set_displayed_quote_ui_enabled(self, enabled):
         self.quote_details_widget.setEnabled(enabled)
@@ -267,8 +276,22 @@ class XmlReportEditor(QMainWindow):
         self.history_log_text_edit.append(message)
 
     def execute_command(self, command: Command):
-        # Delegate to CommandManager. It will call back for logging, dirty flag, and action state update.
+        # Callbacks to editor
         self.command_manager.execute_command(command)
+        if isinstance(command, ChangeSectorsListCommand):
+            self._load_sectors_config_and_update_ui()
+            self.quote_filter_widget.refresh_sectors()
+
+    def handle_sector_filter_changed(self, selected_sector):
+        """Handles the sector filter change event from the QuoteFilterWidget."""
+        if selected_sector:  # If a specific sector is selected
+            filtered_quotes = {name: data for name, data in self.all_quotes_data.items()
+                                 if "sectors" in data and any(s.get("name") == selected_sector for s in data["sectors"])}
+            self.quote_selection_widget.update_quote_list(sorted(list(filtered_quotes.keys()))) # Sort for consistent display
+
+        else:  # If "All Sectors" (None) is selected
+            self.quote_selection_widget.update_quote_list(sorted(list(self.all_quotes_data.keys()))) # Sort for consistent display
+            # No need to call command_manager since no data is being modified
 
     def _set_dirty_flag(self, dirty):
         title = "XML Report Editor"
@@ -290,7 +313,7 @@ class XmlReportEditor(QMainWindow):
 
     def _load_sectors_config_and_update_ui(self):
         self.SECTOR_LIST = data_utils.load_sectors_config(self.SECTOR_LIST)
-        self.sectors_section_widget.refresh_structure(self.SECTOR_LIST)
+        #self.sectors_section_widget.refresh_structure(self.SECTOR_LIST)
 
     def _handle_manage_eprice_companies_dialog(self):
         dialog = ManageEPriceCompaniesDialog(self.EPRICE_FIXED_COMPANIES, self)

@@ -328,10 +328,22 @@
                     <value>70000</value>
                 </company>
             </e_price>
+            <sectors>
+                <sector>
+                    <name>NGÂN HÀNG</name>
+                    <type>main</type>
+                </sector>
+            </sectors>
         </quote>
         <quote>
             <name>CTG</name>
             <price>40000</price>
+            <sectors>
+                <sector>
+                    <name>NGÂN HÀNG</name>
+                    <type>main</type>
+                </sector>
+            </sectors>
         </quote>
         <quote>
             <name>VPB</name>
@@ -360,6 +372,16 @@
                     <date>05/30/2025</date>
                 </report>
             </record>
+            <sectors>
+                <sector>
+                    <name>NGÂN HÀNG</name>
+                    <type>main</type>
+                </sector>
+                <sector>
+                    <name>CHỨNG KHOÁN</name>
+                    <type>sub</type>
+                </sector>
+            </sectors>
         </quote>
     </quotes>
 </root>
