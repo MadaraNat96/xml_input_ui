@@ -156,9 +156,9 @@ class XmlReportEditor(QMainWindow):
         self.sectors_section_widget.sectorRemoved.connect(self.action_handler.handle_remove_sector)
 
         # Instantiate Quote Filter Widget
-        self.quote_filter_widget = QuoteFilterWidget(lambda: self.SECTOR_LIST)
-        self.quote_filter_widget.filterChanged.connect(self.handle_sector_filter_changed)
-
+        self.quote_filter_widget = QuoteFilterWidget(lambda: self.SECTOR_LIST, self.all_quotes_data)
+        self.quote_filter_widget.quoteSelected.connect(self.handle_filtered_quote_selected)  # Connect to new signal
+        
         self.record_report_section_widget.recordReportAddRequested.connect(self.action_handler.handle_record_report_add_requested)
         self.record_report_section_widget.recordReportRemoveRequested.connect(self.action_handler.handle_record_report_remove_requested)
         self.record_report_section_widget.recordReportDetailChanged.connect(self.action_handler.handle_record_report_detail_changed)
@@ -282,17 +282,12 @@ class XmlReportEditor(QMainWindow):
             self._load_sectors_config_and_update_ui()
             self.quote_filter_widget.refresh_sectors()
 
-    def handle_sector_filter_changed(self, selected_sector):
-        """Handles the sector filter change event from the QuoteFilterWidget."""
-        if selected_sector:  # If a specific sector is selected
-            filtered_quotes = {name: data for name, data in self.all_quotes_data.items()
-                                 if "sectors" in data and any(s.get("name") == selected_sector for s in data["sectors"])}
-            self.quote_selection_widget.update_quote_list(sorted(list(filtered_quotes.keys()))) # Sort for consistent display
-
-        else:  # If "All Sectors" (None) is selected
-            self.quote_selection_widget.update_quote_list(sorted(list(self.all_quotes_data.keys()))) # Sort for consistent display
-            # No need to call command_manager since no data is being modified
-
+    def handle_filtered_quote_selected(self, quote_name):
+        """Handles the selection of a quote from the filtered list."""
+        # Update the QuoteSelectionWidget's input field with the selected quote name.
+        self.quote_selection_widget.set_quote_name_input(quote_name)
+        self.handle_select_quote_button(quote_name)
+    
     def _set_dirty_flag(self, dirty):
         title = "XML Report Editor"
         if self.file_manager.get_current_file_path():
@@ -559,6 +554,7 @@ class XmlReportEditor(QMainWindow):
             self._load_data_into_ui(root_date_qdate, all_quotes_data_dict)
             self._set_dirty_flag(False) # Freshly loaded file is not dirty
             self.command_manager.clear_stacks()
+            self.quote_filter_widget.all_quotes_data_provider = all_quotes_data_dict
 
     def _load_data_into_ui(self, root_date_qdate, all_quotes_data_dict):
         """Helper to load parsed data into the UI elements."""
