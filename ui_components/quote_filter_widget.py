@@ -33,6 +33,7 @@ class QuoteFilterWidget(QWidget):
         self.sector_combo = QComboBox(self)
         self.sector_combo.addItem("All Sectors", None)  
         self.sector_combo.currentIndexChanged.connect(self._on_sector_changed)
+        
         filter_layout.addWidget(self.sector_combo)
 
         # Add List Widget to display filtered quotes - Inside the group box, below the label and combo
@@ -63,16 +64,23 @@ class QuoteFilterWidget(QWidget):
         else:
             filtered_quotes = list(all_quotes_data.keys())
         filtered_quotes.sort()
+        if "date" in filtered_quotes: filtered_quotes.remove("date")
         return filtered_quotes
 
-    def _on_sector_changed(self, index):  
-        selected_sector = self.sector_combo.itemData(index)        
+    def _on_sector_changed(self, index):
+        if index is None:
+            selected_sector = "All Sectors"
+        else:
+            selected_sector = self.sector_combo.itemData(index)
         if self.selected_sector != selected_sector:
             self.selected_sector = selected_sector
-            filtered_quotes = self._filter_quotes(selected_sector)
-            if filtered_quotes:
-                self.filterChanged.emit(filtered_quotes)            
-                self._update_filtered_quotes_list_ui(filtered_quotes)
+            if selected_sector == "All Sectors":
+                filtered_quotes = self._filter_quotes(None)
+            else:
+                filtered_quotes = self._filter_quotes(selected_sector)
+            # if filtered_quotes:
+            self.filterChanged.emit(filtered_quotes)            
+            self._update_filtered_quotes_list_ui(filtered_quotes)
     
     def list_key_press_event(self, event: QKeyEvent):
         if event.key() == Qt.Key.Key_Up:

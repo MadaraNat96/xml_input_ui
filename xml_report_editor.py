@@ -555,6 +555,7 @@ class XmlReportEditor(QMainWindow):
             self._set_dirty_flag(False) # Freshly loaded file is not dirty
             self.command_manager.clear_stacks()
             self.quote_filter_widget.all_quotes_data_provider = all_quotes_data_dict
+            self.quote_filter_widget._on_sector_changed(None) # Refresh sectors in the filter widget
 
     def _load_data_into_ui(self, root_date_qdate, all_quotes_data_dict):
         """Helper to load parsed data into the UI elements."""
