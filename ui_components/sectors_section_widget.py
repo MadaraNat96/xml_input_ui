@@ -59,7 +59,7 @@ class SectorsSectionWidget(QWidget):
         type_combo.setCurrentText(sector_type_str)
         type_combo.setFixedWidth(55)
 
-        name_combo = QComboBox() # Replace label with combo
+        name_combo = QComboBox()  # Replace label with combo
 
         # Entry data - Initialize with the provided name, even if empty
         entry_data = {
@@ -76,9 +76,6 @@ class SectorsSectionWidget(QWidget):
             name_combo.addItems(all_sectors)
             if sector_name_str in all_sectors:
                 name_combo.setCurrentText(sector_name_str)
-            else:
-                name_combo.setCurrentText(sector_name_str)  # Set the text even if it's not in the list
-
         name_combo.currentTextChanged.connect(lambda new_name, ed=entry_data: self._handle_sector_value_changed(ed, "name", new_name))
         type_combo.currentTextChanged.connect(lambda new_type, ed=entry_data: self._handle_sector_value_changed(ed, "type", new_type))
 
