@@ -16,7 +16,7 @@ from ui_components.pe_section_widget import PESectionWidget
 from ui_components.sectors_section_widget import SectorsSectionWidget 
 from ui_components.record_report_section_widget import RecordReportSectionWidget
 from ui_components.eps_growth_chart_widget import EPSGrowthChartWidget
-from custom_widgets import FocusAwareLineEdit, HighlightableGroupBox # Import custom widgets
+from custom_widgets import FocusAwareLineEdit, HighlightableGroupBox  # Import custom widgets
 from commands import (Command, ChangeRootDateCommand, ChangeQuoteDetailCommand, 
                       ChangeEPriceValueCommand, ChangePEValueCommand, AddQuoteCommand, RemoveQuoteCommand,
                       ChangeEPSValueCommand, AddEPSYearCommand, RemoveEPSYearCommand,
@@ -28,6 +28,7 @@ from command_manager import CommandManager
 from editor_action_handler import EditorActionHandler # Import the new handler class
 from ui_managers import GlobalHighlightManager # Import the new manager
 from file_manager import FileManager # Import the new FileManager
+from chart_sub_window import ChartSubWindow  # Import the sub window
 import data_utils 
 
 
@@ -48,7 +49,7 @@ class XmlReportEditor(QMainWindow):
         self.file_manager = FileManager(self) # Instantiate FileManager
         self.SECTOR_LIST = []  # Initialize SECTOR_LIST before it's used
         self.command_manager = CommandManager(self) # Instantiate CommandManager
-        self.action_handler = EditorActionHandler(self) # Instantiate ActionHandler
+        self.action_handler = EditorActionHandler(self)  # Instantiate ActionHandler
         
         self.init_ui() 
         self.load_initial_data() 
@@ -184,8 +185,12 @@ class XmlReportEditor(QMainWindow):
         column1_layout.addWidget(self.quote_details_widget)
         column1_layout.addWidget(self.sectors_section_widget)  # Add Sectors Section here
         column1_layout.addWidget(self.quote_filter_widget)  # Add Quote Filter Section here
-        column1_layout.addStretch() 
-        
+        column1_layout.addStretch()
+
+        # Add button above history log
+        self.new_window_button = QPushButton("Chart Window")
+        column1_layout.addWidget(self.new_window_button)
+
         column2_widget = QWidget() 
         column2_layout = QVBoxLayout(column2_widget)
         column2_layout.addWidget(self.eprice_section_widget)
@@ -215,6 +220,7 @@ class XmlReportEditor(QMainWindow):
         column1_layout.addWidget(history_group)
         column1_layout.addStretch() # Ensure it doesn't take too much space initially
 
+        self.new_window_button.clicked.connect(self.open_chart_sub_window)
         self._set_displayed_quote_ui_enabled(False) 
         self._create_menu_bar()
         self._load_sectors_config_and_update_ui()
@@ -297,7 +303,8 @@ class XmlReportEditor(QMainWindow):
         self.setWindowTitle(title)
 
     def _load_eprice_config_and_update_ui(self):
-        # Load the shared list of companies. EPRICE_FIXED_COMPANIES here is the default.
+        """Loads eprice config and updates related UI sections."""
+        # Load the shared list of companies.  EPRICE_FIXED_COMPANIES here is the default.
         self.EPRICE_FIXED_COMPANIES = data_utils.load_eprice_config(self.EPRICE_FIXED_COMPANIES)
 
         # Update all sections that depend on the fixed company list
@@ -307,33 +314,41 @@ class XmlReportEditor(QMainWindow):
         self.record_report_section_widget.update_company_dropdowns()
 
     def _load_sectors_config_and_update_ui(self):
+        """Loads sector configuration and refreshes the UI."""
         self.SECTOR_LIST = data_utils.load_sectors_config(self.SECTOR_LIST)
-        #self.sectors_section_widget.refresh_structure(self.SECTOR_LIST)
 
     def _handle_manage_eprice_companies_dialog(self):
+        """Handles the dialog for managing E-Price companies."""
         dialog = ManageEPriceCompaniesDialog(self.EPRICE_FIXED_COMPANIES, self)
-        if dialog.exec() == QDialog.DialogCode.Accepted: 
+        if dialog.exec() == QDialog.DialogCode.Accepted:
             new_fixed_list = dialog.get_updated_companies()
-            old_fixed_list = list(self.EPRICE_FIXED_COMPANIES) # Make a copy for the command
+            old_fixed_list = list(self.EPRICE_FIXED_COMPANIES)  # Make a copy for the command
 
             if new_fixed_list != old_fixed_list:
                 cmd = ChangeEPriceFixedCompaniesCommand(self, old_fixed_list, new_fixed_list)
                 self.execute_command(cmd)
                 # The command's execute method now handles updating self.EPRICE_FIXED_COMPANIES,
                 # calling _load_eprice_config_and_update_ui(), and saving the config.
-                QMessageBox.information(self, "Fixed Companies List Updated", 
+                QMessageBox.information(self, "Fixed Companies List Updated",
                                         "The list of fixed companies (for E-Price and PE sections) has been updated.")
 
     def _handle_manage_sectors_dialog(self):
+        """Handles the dialog for managing sectors."""
         dialog = ManageSectorsDialog(self.SECTOR_LIST, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             new_sectors_list = dialog.get_updated_sectors()
             old_sectors_list = list(self.SECTOR_LIST)
-
             if new_sectors_list != old_sectors_list:
                 cmd = ChangeSectorsListCommand(self, old_sectors_list, new_sectors_list)
                 self.execute_command(cmd)
                 self._load_sectors_config_and_update_ui()
+
+    def open_chart_sub_window(self):
+        """Opens the Chart Sub Window."""
+        self.chart_sub_window = ChartSubWindow(self)
+        # You can pass initial data or connect signals here if needed
+        # Example: self.chart_sub_window.chart_widget.load_data(some_data)
+        self.chart_sub_window.show()
 
     def save_current_eprice_config(self):
         """Saves the current EPRICE_FIXED_COMPANIES list to the config file."""
