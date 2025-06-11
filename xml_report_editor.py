@@ -282,6 +282,13 @@ class XmlReportEditor(QMainWindow):
         self.history_log_text_edit.append(message)
 
     def execute_command(self, command: Command):
+        """
+        Executes a command and handles any editor-specific updates.
+
+        Args:
+            command (Command): The command to execute.
+        """
+
         # Callbacks to editor
         self.command_manager.execute_command(command)
         if isinstance(command, ChangeSectorsListCommand):
@@ -316,6 +323,7 @@ class XmlReportEditor(QMainWindow):
     def _load_sectors_config_and_update_ui(self):
         """Loads sector configuration and refreshes the UI."""
         self.SECTOR_LIST = data_utils.load_sectors_config(self.SECTOR_LIST)
+        # self.sectors_section_widget.refresh_structure(self.SECTOR_LIST)
 
     def _handle_manage_eprice_companies_dialog(self):
         """Handles the dialog for managing E-Price companies."""
@@ -344,12 +352,13 @@ class XmlReportEditor(QMainWindow):
                 self._load_sectors_config_and_update_ui()
 
     def open_chart_sub_window(self):
-        """Opens the Chart Sub Window."""
-        self.chart_sub_window = ChartSubWindow(self)
-        # You can pass initial data or connect signals here if needed
-        # Example: self.chart_sub_window.chart_widget.load_data(some_data)
-        self.chart_sub_window.show()
-
+                """Opens the Chart Sub Window."""
+                self.chart_sub_window = ChartSubWindow(self)
+                self.chart_sub_window.load_data(self.quote_selection_widget.get_quote_name_input(), "sample/fa_db_main.xml")
+                # You can pass initial data or connect signals here if needed
+                # Example: self.chart_sub_window.chart_widget.load_data(some_data)
+                self.chart_sub_window.show()
+    
     def save_current_eprice_config(self):
         """Saves the current EPRICE_FIXED_COMPANIES list to the config file."""
         data_utils.save_eprice_config(self.EPRICE_FIXED_COMPANIES)
